@@ -3,6 +3,7 @@ import { STOCK } from './stock.js';
 
 export const DATA_KEY = 'iphone-zayavki:data:v1';
 export const ACTIVATIONS = ['Не актив', 'Актив'];
+export const CITIES = ['Москва', 'Питер'];
 
 export function createLocalData(storage, remote, stock = STOCK) {
   let initializing;
@@ -27,6 +28,8 @@ export function createLocalData(storage, remote, stock = STOCK) {
     }
     // Старые копии без активации считаем неактивированными.
     for (const p of data.products) if (!ACTIVATIONS.includes(p.activation)) p.activation = ACTIVATIONS[0];
+    // До разделения по городам всё наличие было московским.
+    for (const p of data.products) if (!CITIES.includes(p.city)) p.city = CITIES[0];
     return data;
   }
   function read() {
@@ -46,11 +49,11 @@ export function createLocalData(storage, remote, stock = STOCK) {
   function addStock() {
     const data = read();
     if (data.stockAdded) return;
-    const key = p => [p.model, p.storage, p.color, p.sim, p.activation].join('|');
+    const key = p => [p.city, p.model, p.storage, p.color, p.sim, p.activation].join('|');
     const have = new Set(data.products.map(key));
     let id = Math.max(data.nextProductId || 1, ...data.products.map(p => p.id + 1));
     for (const [model, storage, color, sim, activation, qty] of stock) {
-      const p = { model, storage, color, sim, activation, price: null, qty };
+      const p = { city: CITIES[0], model, storage, color, sim, activation, price: null, qty };
       if (!have.has(key(p))) data.products.push({ id: id++, ...p });
     }
     Object.assign(data, { nextProductId: id, stockAdded: true });
@@ -100,7 +103,7 @@ export function createLocalData(storage, remote, stock = STOCK) {
       if (resource === 'products') {
         if (method === 'GET') return data.products.map(p => ({ ...p,
           reserved: data.orders.filter(o => o.product_id === p.id && o.status === 'new').length,
-        })).sort((a, b) => [a.model, a.storage, a.color, a.sim, a.activation].join().localeCompare([b.model, b.storage, b.color, b.sim, b.activation].join()));
+        })).sort((a, b) => [a.city, a.model, a.storage, a.color, a.sim, a.activation].join().localeCompare([b.city, b.model, b.storage, b.color, b.sim, b.activation].join()));
         if (user.role !== 'admin') error('Только для админа');
         const index = data.products.findIndex(p => p.id === Number(id));
         if (method !== 'POST' && index < 0) error('Телефон не найден');
@@ -108,7 +111,7 @@ export function createLocalData(storage, remote, stock = STOCK) {
         else if (method === 'POST' || method === 'PUT') {
           const product = Object.fromEntries(['model', 'storage', 'color', 'sim'].map(k => [k, text(body[k])]));
           if (Object.values(product).some(v => !v)) error('Заполните модель, память, цвет и SIM');
-          Object.assign(product, { activation: ACTIVATIONS.includes(body.activation) ? body.activation : ACTIVATIONS[0], price: number(body.price), qty: number(body.qty) ?? 0,
+          Object.assign(product, { city: CITIES.includes(body.city) ? body.city : CITIES[0], activation: ACTIVATIONS.includes(body.activation) ? body.activation : ACTIVATIONS[0], price: number(body.price), qty: number(body.qty) ?? 0,
             id: method === 'POST' ? Math.max(data.nextProductId || 1, ...data.products.map(p => p.id + 1)) : Number(id) });
           if (method === 'POST') {
             data.products.push(product);
@@ -137,7 +140,7 @@ export function createLocalData(storage, remote, stock = STOCK) {
           if (!/^\d{4}-\d{2}-\d{2}$/.test(order.date) || !order.client) error('Дата и имя клиента обязательны');
           if (!order.seller) error('Впишите продавца — чей это телефон');
           Object.assign(order, { id: old?.id || crypto.randomUUID(), created_at: old?.created_at || new Date().toISOString(),
-            product_id: product.id, model: product.model, storage: product.storage, color: product.color, sim: product.sim, activation: product.activation,
+            product_id: product.id, model: product.model, storage: product.storage, color: product.color, sim: product.sim, activation: product.activation, city: product.city,
             price: number(body.price) ?? product.price, status: ['new', 'sold', 'cancel'].includes(body.status) ? body.status : 'new' });
           if (holds(order.status) && !(old && holds(old.status) && old.product_id === order.product_id)) {
             const current = data.products.find(p => p.id === order.product_id);

@@ -127,6 +127,7 @@
         </div>
       </form>
       <div class="toolbar">
+        <div class="seg" id="citySeg"><button data-city="Москва">Москва</button><button data-city="Питер">Питер</button></div>
         <input id="productSearch" class="search" placeholder="Поиск: модель, цвет, память…">
         <span id="productsMeta" class="muted"></span>
       </div>
@@ -168,6 +169,7 @@
       <label>📞 Телефон<input name="phone" type="tel" inputmode="tel" autocomplete="tel" enterkeyhint="next" placeholder="+7 (900) 000-00-00"></label>
     </div>
     <input type="hidden" name="product_id">
+    <label>📍 Город<select id="pCity" required></select></label>
     <label>📱 Модель<select id="pModel" required></select></label>
     <div class="grid3">
       <label>Память<select id="pStorage" required></select></label>

@@ -143,3 +143,13 @@ test('adds starting stock once to existing browser data without duplicates', asy
   await s.request('/products/2', 'DELETE');
   assert.equal((await withStock()).length, 1);
 });
+
+test('products belong to a city; old data is Moscow and orders keep the city', async () => {
+  const { request } = setup();
+  assert.equal((await request('/products'))[0].city, 'Москва');
+  const { id } = await request('/products', 'POST', { ...product, city: 'Питер' });
+  await request('/orders', 'POST', { ...order, product_id: id });
+  assert.equal((await request('/orders'))[0].city, 'Питер');
+  assert.equal((await request('/products', 'POST', { ...product, city: 'Казань' })).id, id + 1);
+  assert.equal((await request('/products')).find(p => p.id === id + 1).city, 'Москва');
+});
