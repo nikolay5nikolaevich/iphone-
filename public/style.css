@@ -258,7 +258,7 @@ button.ag-head:hover { background: var(--card); }
 .toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
 .toolbar .search { max-width: 380px; }
 .toolbar .muted { font-size: 14px; }
-.pgroups { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 640px), 1fr)); gap: 12px; align-items: start; }
+.pgroups { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 900px), 1fr)); gap: 12px; align-items: start; }
 .pgroup { background: var(--panel); border-radius: var(--r-lg); padding: 10px 10px 8px; }
 .pg-head { display: flex; align-items: center; gap: 10px; padding: 2px 2px 8px; }
 .g-model { font-size: 18px; font-weight: 800; letter-spacing: -.02em; border-color: transparent; padding: 6px 8px; flex: 1; min-width: 0; }
