@@ -24,8 +24,7 @@ test('database preserves accounts and sessions across connections', async () => 
   }
 });
 
-test('Vercel requires persistent remote storage and complete configuration', async () => {
-  await assert.rejects(openDatabase({ VERCEL: '1' }), /TURSO_DATABASE_URL/);
+test('Turso requires complete configuration', async () => {
   await assert.rejects(openDatabase({ TURSO_DATABASE_URL: 'libsql://example.turso.io' }), /TURSO_AUTH_TOKEN/);
   await assert.rejects(openDatabase({ TURSO_DATABASE_URL: 'file:data.db', TURSO_AUTH_TOKEN: 'test' }), /libsql/);
   const db = await openDatabase({ VERCEL: '1', TURSO_DATABASE_URL: 'https://example.turso.io', TURSO_AUTH_TOKEN: 'test' });

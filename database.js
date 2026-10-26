@@ -15,11 +15,9 @@ export async function openDatabase(env = process.env) {
       close: () => client.close(),
     };
   }
-  if (env.VERCEL) {
-    throw new Error('Для Vercel задайте TURSO_DATABASE_URL и TURSO_AUTH_TOKEN. Локальный data.db здесь не сохраняется.');
-  }
   const { DatabaseSync } = await import('node:sqlite');
-  const db = new DatabaseSync(env.DB_FILE || 'data.db');
+  // ponytail: на Vercel пишем только в /tmp — аккаунты продавцов сбрасываются при перезапуске; нужна постоянность — задайте TURSO_*.
+  const db = new DatabaseSync(env.DB_FILE || (env.VERCEL ? '/tmp/data.db' : 'data.db'));
   return {
     all: async (sql, ...args) => db.prepare(sql).all(...args),
     get: async (sql, ...args) => db.prepare(sql).get(...args),
