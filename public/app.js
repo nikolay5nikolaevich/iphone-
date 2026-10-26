@@ -144,6 +144,7 @@ async function render() {
   $('#fab').classList.toggle('hidden', state.view === 'admin' && isAdmin());
   $('#newBtn').classList.toggle('hidden', state.view === 'admin' && isAdmin());
   $('#importData').classList.toggle('hidden', !isAdmin());
+  $(".local-tools").classList.toggle("hidden", !isAdmin());
   await loadRefs();
   if (state.view === 'stats') return renderStats();
   if (state.view === 'admin') return renderAdmin();
