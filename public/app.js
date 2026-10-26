@@ -9,6 +9,8 @@ const COLOR_HINTS = ['Cosmic Orange', 'Deep Blue', 'Silver', 'Black', 'White', '
 const SIM_HINTS = ['SIM', '2 SIM', 'SIM + eSIM', 'eSIM'];
 const STORAGE_ORDER = s => (parseInt(s) || 0) * (/ТБ|TB/i.test(s) ? 1024 : 1);
 
+// Порядок карточек в дне по статусу
+const STATUS_ORDER = { sold: 0, new: 1, cancel: 2 };
 const DAYS = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
 const MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
 const STATUS_LABEL = { new: 'В работе', sold: 'Продано', cancel: 'Отказ' };
@@ -236,7 +238,8 @@ function renderWeek() {
   $('#weekKpis').innerHTML = kpis(list);
 
   $('#week').innerHTML = keys.map((key, i) => {
-    const d = parse(key), items = list.filter(o => o.date === key).sort(byTime);
+    // В дне: сначала проданные, потом в работе, отказы — в конце (правее)
+    const d = parse(key), items = list.filter(o => o.date === key).sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || byTime(a, b));
     const rel = { [today]: 'Сегодня', [tomorrow]: 'Завтра', [yesterday]: 'Вчера' }[key];
     const name = rel ? `${rel}<span class="ag-dw">${DAYS[i].toLowerCase()}</span>` : DAYS[i];
     const cls = `${key === today ? 'today' : ''} ${key < today ? 'past' : ''}`;
