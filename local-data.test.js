@@ -16,7 +16,7 @@ function setup() {
     if (path === '/users') return [{ name: 'Админ' }];
     throw new Error('Unexpected server mutation: ' + path);
   };
-  const data = createLocalData(storage, remote);
+  const data = createLocalData(storage, remote, []);
   const request = (path, method = 'GET', body, user = admin) => data.request(path, { method, body }, user);
   return { values, storage, remote, calls, data, request };
 }
@@ -41,7 +41,7 @@ test('imports once and preserves browser changes after a reload', async () => {
   const s = setup();
   await s.request('/products');
   await s.request('/products/1', 'PUT', { ...product, price: '95 000' });
-  const reloaded = createLocalData(s.storage, s.remote);
+  const reloaded = createLocalData(s.storage, s.remote, []);
   assert.equal((await reloaded.request('/products', {}, admin))[0].price, 95000);
   assert.deepEqual(s.calls, ['/products', '/orders']);
   assert.equal(JSON.parse(s.values.get(DATA_KEY)).products[0].reserved, undefined);
@@ -113,7 +113,7 @@ test('reports storage failures, preserves corrupted data and retries failed migr
   const data = createLocalData(fresh.storage, async path => {
     if (fail) throw new Error('offline');
     return fresh.remote(path);
-  });
+  }, []);
   await assert.rejects(data.request('/products', {}, admin), /offline/);
   assert.equal(fresh.values.has(DATA_KEY), false);
   fail = false;
@@ -129,4 +129,17 @@ test('activation is stored on products, copied to orders and defaults for old da
   await request('/orders', 'POST', { ...order, product_id: id });
   assert.equal((await request('/orders'))[0].activation, 'Актив');
   assert.equal(JSON.parse(values.get(DATA_KEY)).products.length, 2);
+});
+
+test('adds starting stock once to existing browser data without duplicates', async () => {
+  const s = setup();
+  await s.request('/products');
+  const saved = JSON.parse(s.values.get(DATA_KEY));
+  delete saved.stockAdded; // как у браузера, сохранившего базу до появления стартового наличия
+  s.values.set(DATA_KEY, JSON.stringify(saved));
+  const stock = [['iPhone 17', '256 ГБ', 'Black', 'eSIM', 'Не актив', 1], ['iPhone 15', '128 ГБ', 'Black', '2 SIM', 'Актив', 2]];
+  const withStock = () => createLocalData(s.storage, s.remote, stock).request('/products', {}, admin);
+  assert.equal((await withStock()).length, 2);
+  await s.request('/products/2', 'DELETE');
+  assert.equal((await withStock()).length, 1);
 });

@@ -1,8 +1,10 @@
 // Заявки и склад общие для аккаунтов в пределах этого браузера и адреса сайта.
+import { STOCK } from './stock.js';
+
 export const DATA_KEY = 'iphone-zayavki:data:v1';
 export const ACTIVATIONS = ['Не актив', 'Актив'];
 
-export function createLocalData(storage, remote) {
+export function createLocalData(storage, remote, stock = STOCK) {
   let initializing;
   const text = v => String(v ?? '').trim().slice(0, 500);
   const number = v => Number(String(v ?? '').replace(/\D/g, '')) || null;
@@ -40,8 +42,22 @@ export function createLocalData(storage, remote) {
     try { storage.setItem(DATA_KEY, JSON.stringify(data)); }
     catch { error('Данные не сохранены: хранилище браузера недоступно или заполнено.'); }
   }
+  // Один раз дописываем стартовое наличие в уже существующую базу браузера, без дублей.
+  function addStock() {
+    const data = read();
+    if (data.stockAdded) return;
+    const key = p => [p.model, p.storage, p.color, p.sim, p.activation].join('|');
+    const have = new Set(data.products.map(key));
+    let id = Math.max(data.nextProductId || 1, ...data.products.map(p => p.id + 1));
+    for (const [model, storage, color, sim, activation, qty] of stock) {
+      const p = { model, storage, color, sim, activation, price: null, qty };
+      if (!have.has(key(p))) data.products.push({ id: id++, ...p });
+    }
+    Object.assign(data, { nextProductId: id, stockAdded: true });
+    write(data);
+  }
   async function ready() {
-    if (read()) return;
+    if (read()) return addStock();
     if (!initializing) {
       initializing = (async () => {
         const [products, orders] = await Promise.all([remote('/products'), remote('/orders')]);
@@ -50,6 +66,7 @@ export function createLocalData(storage, remote) {
       })().finally(() => { initializing = null; });
     }
     await initializing;
+    addStock();
   }
   function moveStock(data, old, order) {
     const previous = old && data.products.find(p => p.id === old.product_id);

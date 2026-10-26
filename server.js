@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { openDatabase } from './database.js';
+import { STOCK } from './public/stock.js';
 
 const PORT = process.env.PORT || 3000;
 const db = await openDatabase();
@@ -67,26 +68,9 @@ if (!(await all('PRAGMA table_info(products)')).some(c => c.name === 'activation
 if (!(await all('PRAGMA table_info(orders)')).some(c => c.name === 'activation')) await db.exec('ALTER TABLE orders ADD COLUMN activation TEXT');
 const ACTIVATIONS = ['Не актив', 'Актив'];
 
-// Стартовое наличие для пустой базы: [модель, память, цвет, SIM, активация, штук]
+// Стартовое наличие для пустой базы
 if (!(await get('SELECT 1 FROM products'))) {
-  for (const p of [
-    ['iPhone 15', '128 ГБ', 'Black', '2 SIM', 'Не актив', 1],
-    ['iPhone 17 Pro', '256 ГБ', 'Deep Blue', 'eSIM', 'Актив', 1],
-    ['iPhone 17 Pro', '256 ГБ', 'Deep Blue', 'eSIM', 'Не актив', 2],
-    ['iPhone 17 Pro', '512 ГБ', 'Deep Blue', 'eSIM', 'Актив', 1],
-    ['iPhone 17 Pro', '512 ГБ', 'Deep Blue', 'eSIM', 'Не актив', 1],
-    ['iPhone 17 Pro', '512 ГБ', 'Silver', 'eSIM', 'Не актив', 1],
-    ['iPhone 17 Pro', '512 ГБ', 'Deep Blue', '2 SIM', 'Актив', 1],
-    ['iPhone 17 Pro Max', '256 ГБ', 'Deep Blue', '2 SIM', 'Не актив', 1],
-    ['iPhone 17 Pro Max', '256 ГБ', 'Orange', 'eSIM', 'Не актив', 1],
-    ['iPhone 17 Pro Max', '512 ГБ', 'Orange', 'SIM + eSIM', 'Не актив', 3],
-    ['iPhone 17 Pro Max', '512 ГБ', 'Silver', 'SIM + eSIM', 'Не актив', 1],
-    ['iPhone 17 Pro Max', '512 ГБ', 'Silver', '2 SIM', 'Не актив', 2],
-    ['iPhone 17 Pro Max', '1 ТБ', 'Blue', 'SIM + eSIM', 'Не актив', 3],
-    ['iPhone 17 Pro Max', '1 ТБ', 'Deep Blue', '2 SIM', 'Не актив', 1],
-    ['iPhone 17 Pro Max', '1 ТБ', 'Orange', 'SIM + eSIM', 'Не актив', 3],
-    ['iPhone 17 Pro Max', '1 ТБ', 'Silver', '2 SIM', 'Не актив', 7],
-  ]) await run('INSERT INTO products (model, storage, color, sim, activation, qty) VALUES (?, ?, ?, ?, ?, ?)', ...p);
+  for (const p of STOCK) await run('INSERT INTO products (model, storage, color, sim, activation, qty) VALUES (?, ?, ?, ?, ?, ?)', ...p);
 }
 
 const str = v => (v == null ? '' : String(v).trim().slice(0, 500));
