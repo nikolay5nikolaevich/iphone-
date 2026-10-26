@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Заявки · iPhone</title>
+<meta name="theme-color" content="#17181c">
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap">
 <link rel="stylesheet" href="style.css">
@@ -14,7 +16,7 @@
 <!-- Вход -->
 <section id="login" class="login hidden">
   <form id="loginForm" class="login-card">
-    <div class="logo"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg></div>
+    <div class="logo"><img src="/icon.svg" width="56" height="56" alt="" decoding="async"></div>
     <h1>Заявки</h1>
     <p class="muted">Войдите под своим логином</p>
     <input id="loginName" placeholder="Логин" required autocomplete="username" autocapitalize="off">
@@ -27,8 +29,8 @@
 <!-- Приложение -->
 <section id="app" class="hidden">
   <header class="top">
-    <div class="brand"><span class="logo sm"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg></span>Заявки</div>
-    <nav class="tabs">
+    <div class="brand"><span class="logo sm"><img src="/icon.svg" width="34" height="34" alt="" decoding="async"></span>Заявки</div>
+    <nav class="tabs" aria-label="Основные разделы">
       <button data-view="week" class="tab active"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>Неделя</span></button>
       <button data-view="mine" class="tab"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg><span>Мои заказы</span></button>
       <button data-view="stats" class="tab"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Продажи</span></button>
@@ -96,14 +98,28 @@
       </div>
     </div>
 
+    <details class="local-tools">
+      <summary>Резервная копия базы</summary>
+      <p class="muted">Заявки и телефоны сохраняются в этом браузере. На других устройствах будет отдельная база.</p>
+      <div class="local-actions">
+        <button id="exportData" class="btn" type="button">Экспорт базы</button>
+        <button id="importData" class="btn hidden" type="button">Импорт базы</button>
+      </div>
+      <input id="importFile" type="file" accept="application/json,.json" class="hidden" aria-label="Файл базы">
+    </details>
     <div id="productsPane" class="page">
-      <form id="productForm" class="addbox">
+      <form id="productForm" class="addbox" autocomplete="off">
         <div class="addbox-title">Добавить телефон в базу</div>
         <div class="add-row">
-          <label>Модель<input name="model" placeholder="iPhone 17 Pro Max" list="modelList" required></label>
-          <label>Память<input name="storage" placeholder="256 ГБ" list="storageList" required></label>
-          <label>Цвет<input name="color" placeholder="Deep Blue" list="colorList" required></label>
-          <label>SIM<input name="sim" placeholder="2 SIM" list="simList" required></label>
+          <label>Модель
+            <select id="productModel" name="model" required aria-label="Модель телефона">
+              <option value="" disabled selected>Выберите модель</option>
+            </select>
+            <input id="customProductModel" class="hidden" name="customModel" placeholder="Введите название модели" aria-label="Другая модель" autocomplete="off" spellcheck="false" disabled>
+          </label>
+          <label>Память<input name="storage" placeholder="256 ГБ" list="storageList" autocomplete="off" required></label>
+          <label>Цвет<input name="color" placeholder="Deep Blue" list="colorList" autocomplete="off" required></label>
+          <label>SIM<input name="sim" placeholder="2 SIM" list="simList" autocomplete="off" required></label>
           <label>Цена, ₽<input name="price" placeholder="0" inputmode="numeric"></label>
           <label>Штук<input name="qty" placeholder="1" inputmode="numeric"></label>
           <button class="btn primary" type="submit">+ Добавить</button>
@@ -135,7 +151,7 @@
 </section>
 
 <!-- Форма заявки -->
-<dialog id="dlg">
+<dialog id="dlg" aria-labelledby="dlgTitle">
   <form id="orderForm" method="dialog">
     <div class="dlg-head">
       <h3 id="dlgTitle">Новая заявка</h3>
@@ -147,8 +163,8 @@
       <label>🕐 Время приезда<input type="time" name="time"></label>
     </div>
     <div class="grid2">
-      <label>👤 Имя клиента<input name="client" required placeholder="Михаил"></label>
-      <label>📞 Телефон<input name="phone" type="tel" inputmode="tel" placeholder="+7 (900) 000-00-00"></label>
+      <label>👤 Имя клиента<input name="client" required placeholder="Михаил" autocomplete="name" enterkeyhint="next"></label>
+      <label>📞 Телефон<input name="phone" type="tel" inputmode="tel" autocomplete="tel" enterkeyhint="next" placeholder="+7 (900) 000-00-00"></label>
     </div>
     <input type="hidden" name="product_id">
     <label>📱 Модель<select id="pModel" required></select></label>
@@ -165,7 +181,7 @@
     </div>
     <label>⚠️ Комментарий / договорённость<textarea name="comment" rows="2" placeholder="По наличию скинуть фото задней части коробки"></textarea></label>
 
-    <div class="status-pick" id="statusPick">
+    <div class="status-pick" id="statusPick" role="group" aria-label="Статус заявки">
       <label><input type="radio" name="status" value="new" checked><span>В работе</span></label>
       <label><input type="radio" name="status" value="sold"><span>✅ Продано</span></label>
       <label><input type="radio" name="status" value="cancel"><span>Отказ</span></label>
@@ -186,6 +202,6 @@
 <datalist id="simList"></datalist>
 <div id="toast" class="toast"></div>
 
-<script src="app.js"></script>
+<script type="module" src="app.js"></script>
 </body>
 </html>

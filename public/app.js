@@ -1,3 +1,5 @@
+import { createLocalData, DATA_KEY } from './local-data.js';
+
 // Подсказки для админа при заполнении базы (в заявках выбор — только из базы)
 const MODEL_HINTS = ['iPhone 17 Pro Max', 'iPhone 17 Pro', 'iPhone Air', 'iPhone 17', 'iPhone 16 Pro Max', 'iPhone 16 Pro',
   'iPhone 16 Plus', 'iPhone 16', 'iPhone 16e', 'iPhone 15 Pro Max', 'iPhone 15 Pro', 'iPhone 15 Plus', 'iPhone 15', 'iPhone 14', 'iPhone 13'];
@@ -80,7 +82,21 @@ function formatPhone(v) {
   return r;
 }
 
+const localData = createLocalData({
+  getItem: key => localStorage.getItem(key),
+  setItem: (key, value) => localStorage.setItem(key, value),
+}, serverApi);
+
 async function api(path, opts = {}) {
+  if (/^\/(products|orders|sellers)(\/|\?|$)/.test(path)) {
+    // Web Locks предотвращает потерю изменений при работе в нескольких вкладках.
+    const run = () => localData.request(path, opts, state.me);
+    return navigator.locks ? navigator.locks.request(DATA_KEY, run) : run();
+  }
+  return serverApi(path, opts);
+}
+
+async function serverApi(path, opts = {}) {
   const res = await fetch('/api' + path, {
     ...opts,
     headers: { 'Content-Type': 'application/json', 'x-token': state.token || '' },
@@ -123,6 +139,7 @@ $('#meBtn').onclick = async () => {
 // ---------- загрузка ----------
 async function loadRefs() {
   [state.products, state.users, state.sellers] = await Promise.all([api('/products'), api('/users'), api('/sellers')]);
+  fillProductModels();
   const f = $('#sellerFilter'), cur = f.value;
   f.innerHTML = '<option value="">Все продавцы</option>' + state.sellers.map(n => `<option>${esc(n)}</option>`).join('');
   f.value = state.sellers.includes(cur) ? cur : '';
@@ -137,6 +154,7 @@ async function render() {
   for (const v of ['week', 'mine', 'stats', 'admin']) $(`#${v}View`).classList.toggle('hidden', state.view !== v);
   $('#fab').classList.toggle('hidden', state.view === 'admin' && isAdmin());
   $('#newBtn').classList.toggle('hidden', state.view === 'admin' && isAdmin());
+  $('#importData').classList.toggle('hidden', !isAdmin());
   await loadRefs();
   if (state.view === 'stats') return renderStats();
   if (state.view === 'admin') return renderAdmin();
@@ -199,6 +217,7 @@ function kpis(list) {
 
 // items: [{ label, value, cls }], cls — 'today' | 'future'. Больше 12 столбиков — без подписей сумм.
 function bars(items) {
+  if (!items.some(it => it.value > 0)) return '<div class="chart-empty">За этот период продаж пока нет</div>';
   const max = Math.max(1, ...items.map(i => i.value)), dense = items.length > 12;
   return `<div class="bars ${dense ? 'dense' : ''}">${items.map((it, i) => `<div class="b ${it.cls || ''}" title="${esc(it.label)}: ${money(it.value)}">
     <em>${!dense && it.value ? short(it.value) : ''}</em>
@@ -266,7 +285,13 @@ function renderWeek() {
 }
 $('#prevWeek').onclick = () => { state.weekStart = addDays(state.weekStart, -7); render().catch(fail); };
 $('#nextWeek').onclick = () => { state.weekStart = addDays(state.weekStart, 7); render().catch(fail); };
-$('#todayBtn').onclick = () => { state.weekStart = mondayOf(new Date()); render().catch(fail); };
+$('#todayBtn').onclick = async () => {
+  state.weekStart = mondayOf(new Date());
+  try {
+    await render();
+    $('#week .today')?.scrollIntoView({ block: 'start', behavior: 'instant' });
+  } catch (err) { fail(err); }
+};
 $('#sellerFilter').onchange = renderWeek;
 
 // ---------- мои заказы ----------
@@ -363,6 +388,23 @@ $('#statsSeg').onclick = e => {
 };
 
 // ---------- база (только админ) ----------
+function fillProductModels() {
+  const select = $('#productModel'), current = select.value;
+  const models = uniq([...MODEL_HINTS, ...state.products.map(p => p.model)]);
+  select.innerHTML = '<option value="" disabled>Выберите модель</option>'
+    + models.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('')
+    + '<option value="__custom__">Другая модель…</option>';
+  select.value = current === '__custom__' || models.includes(current) ? current : '';
+}
+fillProductModels();
+$('#productModel').onchange = () => {
+  const custom = $('#customProductModel');
+  const enabled = $('#productModel').value === '__custom__';
+  custom.disabled = !enabled;
+  custom.required = enabled;
+  custom.classList.toggle('hidden', !enabled);
+  if (enabled) custom.focus();
+};
 $('#modelList').innerHTML = MODEL_HINTS.map(v => `<option value="${v}">`).join('');
 $('#storageList').innerHTML = STORAGE_HINTS.map(v => `<option value="${v}">`).join('');
 $('#colorList').innerHTML = COLOR_HINTS.map(v => `<option value="${v}">`).join('');
@@ -410,24 +452,24 @@ function renderProducts() {
       <div class="pg-head"><h3 class="g-title">${esc(m)}</h3></div>
       <div class="pg-stock">${stockSum(ps)}</div>
       <div class="prow ro th"><span>Память</span><span>Цвет</span><span>SIM</span><span>Наличие</span></div>
-      ${ps.map(p => `<div class="prow ro"><span>${esc(p.storage)}</span><span class="color-cell">${color(p)}${esc(p.color)}</span><span>${esc(p.sim)}</span>${stockCell(p)}</div>`).join('')}
+      ${ps.map(p => `<div class="prow ro"><span data-label="Память">${esc(p.storage)}</span><span data-label="Цвет">${color(p)} ${esc(p.color)}</span><span data-label="SIM">${esc(p.sim)}</span>${stockCell(p)}</div>`).join('')}
     </section>`;
     return `<section class="pgroup">
       <div class="pg-head">
-        <input class="g-model" value="${esc(m)}" data-model="${esc(m)}" aria-label="Название модели" title="Переименовать модель целиком">
+        <input class="g-model" value="${esc(m)}" data-model="${esc(m)}" list="modelList" autocomplete="off" spellcheck="false" aria-label="Название модели" title="Переименовать модель целиком">
         <span class="pg-meta">${plural(ps.length, 'вариант', 'варианта', 'вариантов')}${prices.length ? ' · ' + (lo === hi ? money(lo) : `${fmtPrice(lo)} – ${money(hi)}`) : ''}</span>
       </div>
       <div class="pg-stock">${stockSum(ps)}</div>
       <div class="prow th"><span>Память</span><span>Цвет</span><span>SIM</span><span>Цена, ₽</span><span>Всего, шт</span><span>Наличие</span><span></span></div>
       ${ps.map(p => `<form class="prow" data-id="${p.id}">
         <input type="hidden" name="model" value="${esc(p.model)}">
-        <input name="storage" value="${esc(p.storage)}" list="storageList" required aria-label="Память">
-        <span class="color-cell">${color(p)}<input name="color" value="${esc(p.color)}" list="colorList" required aria-label="Цвет"></span>
-        <input name="sim" value="${esc(p.sim)}" list="simList" required aria-label="SIM">
-        <input name="price" value="${fmtPrice(p.price)}" placeholder="цена" inputmode="numeric" aria-label="Цена">
-        <input name="qty" value="${p.qty || 0}" inputmode="numeric" aria-label="Всего штук">
+        <label class="product-field"><span class="field-label">Память</span><input name="storage" value="${esc(p.storage)}" list="storageList" required aria-label="Память"></label>
+        <label class="product-field"><span class="field-label">Цвет</span><span class="color-cell">${color(p)}<input name="color" value="${esc(p.color)}" list="colorList" required aria-label="Цвет"></span></label>
+        <label class="product-field"><span class="field-label">SIM</span><input name="sim" value="${esc(p.sim)}" list="simList" required aria-label="SIM"></label>
+        <label class="product-field"><span class="field-label">Цена, ₽</span><input name="price" value="${fmtPrice(p.price)}" placeholder="цена" inputmode="numeric" aria-label="Цена"></label>
+        <label class="product-field"><span class="field-label">Всего, шт</span><input name="qty" value="${p.qty || 0}" inputmode="numeric" aria-label="Всего штук"></label>
         ${stockCell(p)}
-        <div class="acts"><button type="submit" title="Сохранить">✓</button><button type="button" class="del" title="Удалить">✕</button></div>
+        <div class="acts"><button type="submit" title="Сохранить" aria-label="Сохранить вариант телефона">✓</button><button type="button" class="del" title="Удалить" aria-label="Удалить вариант телефона">✕</button></div>
       </form>`).join('')}
     </section>`;
   }).join('');
@@ -436,7 +478,11 @@ $('#productSearch').oninput = renderProducts;
 $('#productForm').onsubmit = async e => {
   e.preventDefault();
   try {
-    await api('/products', { method: 'POST', body: Object.fromEntries(new FormData(e.target)) });
+    const body = Object.fromEntries(new FormData(e.target));
+    if (body.model === '__custom__') body.model = (body.customModel || '').trim();
+    delete body.customModel;
+    if (!body.model) return toast('Выберите или введите модель телефона');
+    await api('/products', { method: 'POST', body });
     // модель и цену оставляем — удобно добавлять подряд варианты одной модели
     e.target.color.value = ''; e.target.color.focus();
     toast('Добавлено'); await loadRefs(); renderProducts();
@@ -501,7 +547,11 @@ $('#userForm').onsubmit = async e => {
 $('#usersList').addEventListener('submit', async e => {
   e.preventDefault();
   try {
+    const previous = state.users.find(u => u.login === e.target.dataset.login)?.name;
     await api('/users/' + e.target.dataset.login, { method: 'PUT', body: Object.fromEntries(new FormData(e.target)) });
+    const rename = () => localData.renameSeller(previous, e.target.elements.name.value.trim());
+    if (navigator.locks) await navigator.locks.request(DATA_KEY, rename);
+    else await rename();
     if (e.target.dataset.login === state.me.login) state.me = await api('/me');
     toast('Сохранено'); render().catch(fail);
   } catch (err) { fail(err); }
@@ -567,6 +617,7 @@ function openForm(o, date) {
   if (o) form.price.value = fmtPrice(o.price);
   form.querySelector(`input[name=status][value=${v.status || 'new'}]`).checked = true;
   dlg.showModal();
+  dlg.scrollTop = 0;
 }
 $('#fab').onclick = $('#newBtn').onclick = () => openForm(null);
 $('#dlgClose').onclick = () => dlg.close();
@@ -605,10 +656,27 @@ $('#copyBtn').onclick = async () => {
 };
 
 // ---------- навигация ----------
-document.querySelector('.tabs').onclick = e => {
+document.querySelector('.tabs').onclick = async e => {
   const b = e.target.closest('.tab'); if (!b) return;
-  state.view = b.dataset.view; render().catch(fail);
+  state.view = b.dataset.view;
+  try { await render(); window.scrollTo({ top: 0, behavior: 'instant' }); } catch (err) { fail(err); }
 };
+
+// При открытой клавиатуре форма занимает видимую часть экрана, а нижняя панель не мешает вводу.
+function updateViewport() {
+  const viewport = window.visualViewport;
+  const height = viewport?.height || window.innerHeight;
+  document.documentElement.style.setProperty('--viewport-height', `${height}px`);
+  document.documentElement.style.setProperty('--viewport-top', `${viewport?.offsetTop || 0}px`);
+  document.body.classList.toggle('keyboard-open', window.innerHeight - height > 120
+    && document.activeElement?.matches('input, textarea, select'));
+}
+window.visualViewport?.addEventListener('resize', updateViewport);
+window.visualViewport?.addEventListener('scroll', updateViewport);
+window.addEventListener('resize', updateViewport);
+document.addEventListener('focusin', updateViewport);
+document.addEventListener('focusout', () => requestAnimationFrame(updateViewport));
+updateViewport();
 
 function start() {
   $('#login').classList.add('hidden'); $('#app').classList.remove('hidden');
@@ -616,3 +684,38 @@ function start() {
 }
 if (state.token) api('/me').then(u => { state.me = u; start(); }).catch(() => showLogin());
 else showLogin();
+
+window.addEventListener('storage', e => {
+  if (e.key === DATA_KEY && state.me) render().catch(fail);
+});
+
+$('#exportData').onclick = async () => {
+  try {
+    const snapshot = await (navigator.locks
+      ? navigator.locks.request(DATA_KEY, () => localData.exportData()) : localData.exportData());
+    const url = URL.createObjectURL(new Blob([snapshot], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `iphone-zayavki-${iso(new Date())}.json`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  } catch (err) { fail(err); }
+};
+$('#importData').onclick = () => { if (isAdmin()) $('#importFile').click(); };
+$('#importFile').onchange = async e => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file || !isAdmin()) return;
+  if (!confirm('Заменить заявки и телефоны в этом браузере данными из файла? Перед заменой можно сделать экспорт базы.')) return;
+  try {
+    const raw = await file.text();
+    const restore = () => localData.importData(raw);
+    if (navigator.locks) await navigator.locks.request(DATA_KEY, restore);
+    else restore();
+    if (dlg.open) dlg.close();
+    toast('База импортирована');
+    await render();
+  } catch (err) { fail(err); }
+};

@@ -4,12 +4,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node server.js"
+    "start": "node --env-file-if-exists=.env server.js",
+    "dev": "node --env-file-if-exists=.env --watch server.js",
+    "check": "node --check server.js && node --check database.js && node --check public/app.js && node --check public/local-data.js",
+    "test": "node --test *.test.js",
+    "test:mobile": "node scripts/mobile-check.mjs"
   },
   "engines": {
-    "node": ">=22.5"
+    "node": "24.x"
   },
   "dependencies": {
+    "@libsql/client": "^0.18.0",
     "express": "^4.21.2"
   }
 }

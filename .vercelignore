@@ -1,0 +1,13 @@
+.git
+.env
+.env.*
+!.env.example
+node_modules
+.npm-cache
+*.db
+*.db-*
+*.log
+*.test.js
+DEPLOY.md
+.artifacts
+scripts/mobile-check.mjs

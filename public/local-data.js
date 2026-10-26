@@ -1,0 +1,145 @@
+// Заявки и склад общие для аккаунтов в пределах этого браузера и адреса сайта.
+export const DATA_KEY = 'iphone-zayavki:data:v1';
+
+export function createLocalData(storage, remote) {
+  let initializing;
+  const text = v => String(v ?? '').trim().slice(0, 500);
+  const number = v => Number(String(v ?? '').replace(/\D/g, '')) || null;
+  const holds = status => status === 'new' || status === 'sold';
+  const error = message => { throw new Error(message); };
+  function decode(raw) {
+    const data = JSON.parse(raw);
+    if (data?.version !== 1 || !Array.isArray(data.products) || !Array.isArray(data.orders)
+      || !data.products.every(p => p && Number.isSafeInteger(p.id) && p.id > 0
+        && ['model', 'storage', 'color', 'sim'].every(k => typeof p[k] === 'string')
+        && Number.isSafeInteger(p.qty) && p.qty >= 0 && (p.price === null || Number.isFinite(p.price)))
+      || !data.orders.every(o => o && typeof o.id === 'string'
+        && ['date', 'client', 'seller', 'model', 'storage', 'color', 'sim'].every(k => typeof o[k] === 'string')
+        && /^\d{4}-\d{2}-\d{2}$/.test(o.date) && ['new', 'sold', 'cancel'].includes(o.status)
+        && (o.price === null || Number.isFinite(o.price)))
+      || new Set(data.products.map(p => p.id)).size !== data.products.length
+      || new Set(data.orders.map(o => o.id)).size !== data.orders.length
+      || (data.nextProductId !== undefined && (!Number.isSafeInteger(data.nextProductId) || data.nextProductId < 1))) {
+      throw new Error('Неверный формат базы');
+    }
+    return data;
+  }
+  function read() {
+    let raw;
+    try { raw = storage.getItem(DATA_KEY); }
+    catch { error('Не удалось прочитать данные браузера. Разрешите localStorage.'); }
+    if (raw === null) return null;
+    try {
+      return decode(raw);
+    } catch { error('Сохранённые данные повреждены. Не очищайте хранилище: сначала сохраните его копию.'); }
+  }
+  function write(data) {
+    try { storage.setItem(DATA_KEY, JSON.stringify(data)); }
+    catch { error('Данные не сохранены: хранилище браузера недоступно или заполнено.'); }
+  }
+  async function ready() {
+    if (read()) return;
+    if (!initializing) {
+      initializing = (async () => {
+        const [products, orders] = await Promise.all([remote('/products'), remote('/orders')]);
+        // Другая вкладка могла завершить перенос, пока загружались данные.
+        if (!read()) write({ version: 1, products: products.map(({ reserved, ...p }) => p), orders });
+      })().finally(() => { initializing = null; });
+    }
+    await initializing;
+  }
+  function moveStock(data, old, order) {
+    const previous = old && data.products.find(p => p.id === old.product_id);
+    const next = order && data.products.find(p => p.id === order.product_id);
+    if (previous && old.status === 'sold') previous.qty += 1;
+    if (next && order.status === 'sold') next.qty = Math.max(0, next.qty - 1);
+  }
+  return {
+    async exportData() {
+      await ready();
+      return JSON.stringify(read(), null, 2);
+    },
+    importData(raw) {
+      let data;
+      try { data = decode(raw); }
+      catch { error('Не удалось импортировать файл: неверный формат базы.'); }
+      write(data);
+    },
+    async request(path, opts = {}, user) {
+      if (!user) error('Нужен вход');
+      await ready();
+      const data = read();
+      const url = new URL(path, 'http://local');
+      const [, resource, id] = url.pathname.split('/');
+      const method = opts.method || 'GET';
+      const body = opts.body || {};
+      if (resource === 'sellers' && method === 'GET') {
+        const users = await remote('/users');
+        return [...new Set([...data.orders.map(o => o.seller), ...users.map(u => u.name)])].sort();
+      }
+      if (resource === 'products') {
+        if (method === 'GET') return data.products.map(p => ({ ...p,
+          reserved: data.orders.filter(o => o.product_id === p.id && o.status === 'new').length,
+        })).sort((a, b) => [a.model, a.storage, a.color, a.sim].join().localeCompare([b.model, b.storage, b.color, b.sim].join()));
+        if (user.role !== 'admin') error('Только для админа');
+        const index = data.products.findIndex(p => p.id === Number(id));
+        if (method !== 'POST' && index < 0) error('Телефон не найден');
+        if (method === 'DELETE') data.products.splice(index, 1);
+        else if (method === 'POST' || method === 'PUT') {
+          const product = Object.fromEntries(['model', 'storage', 'color', 'sim'].map(k => [k, text(body[k])]));
+          if (Object.values(product).some(v => !v)) error('Заполните модель, память, цвет и SIM');
+          Object.assign(product, { price: number(body.price), qty: number(body.qty) ?? 0,
+            id: method === 'POST' ? Math.max(data.nextProductId || 1, ...data.products.map(p => p.id + 1)) : Number(id) });
+          if (method === 'POST') {
+            data.products.push(product);
+            data.nextProductId = product.id + 1;
+          } else data.products[index] = product;
+          write(data);
+          return { id: product.id };
+        } else error('Неизвестная операция');
+      } else if (resource === 'orders') {
+        if (method === 'GET') {
+          const from = url.searchParams.get('from'), to = url.searchParams.get('to');
+          return data.orders.filter(o => !(from && to) || (o.date >= from && o.date <= to))
+            .sort((a, b) => (from && to ? 1 : -1) * (a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || '')));
+        }
+        const index = data.orders.findIndex(o => o.id === id);
+        const old = data.orders[index];
+        if (method !== 'POST' && !old) error('Заявка не найдена');
+        if (method === 'DELETE') {
+          moveStock(data, old, null);
+          data.orders.splice(index, 1);
+        } else if (method === 'POST' || method === 'PUT') {
+          const product = data.products.find(p => p.id === Number(body.product_id))
+            || (old && old.product_id === Number(body.product_id) ? { ...old, id: old.product_id } : null);
+          if (!product) error('Выберите телефон из базы');
+          const order = Object.fromEntries(['date', 'time', 'client', 'phone', 'comment', 'seller'].map(k => [k, text(body[k])]));
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(order.date) || !order.client) error('Дата и имя клиента обязательны');
+          if (!order.seller) error('Впишите продавца — чей это телефон');
+          Object.assign(order, { id: old?.id || crypto.randomUUID(), created_at: old?.created_at || new Date().toISOString(),
+            product_id: product.id, model: product.model, storage: product.storage, color: product.color, sim: product.sim,
+            price: number(body.price) ?? product.price, status: ['new', 'sold', 'cancel'].includes(body.status) ? body.status : 'new' });
+          if (holds(order.status) && !(old && holds(old.status) && old.product_id === order.product_id)) {
+            const current = data.products.find(p => p.id === order.product_id);
+            const reserved = data.orders.filter(o => o.product_id === order.product_id && o.status === 'new' && o.id !== old?.id).length;
+            if (current && current.qty - reserved < 1) error('Этого телефона нет в наличии — все штуки проданы или в брони');
+          }
+          moveStock(data, old, order);
+          if (method === 'POST') data.orders.push(order);
+          else data.orders[index] = order;
+          write(data);
+          return { id: order.id };
+        } else error('Неизвестная операция');
+      } else error('Неизвестная операция');
+      write(data);
+      return { ok: true };
+    },
+    async renameSeller(previous, next) {
+      if (!next || previous === next) return;
+      await ready();
+      const data = read();
+      for (const order of data.orders) if (order.seller === previous) order.seller = next;
+      write(data);
+    },
+  };
+}
