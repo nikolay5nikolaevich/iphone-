@@ -263,7 +263,7 @@ button.ag-head:hover { background: var(--card); }
 .pg-head { display: flex; align-items: center; gap: 10px; padding: 2px 2px 8px; }
 .g-model { font-size: 18px; font-weight: 800; letter-spacing: -.02em; border-color: transparent; padding: 6px 8px; flex: 1; min-width: 0; }
 .pg-meta { color: var(--muted); font-size: 13px; white-space: nowrap; padding-right: 6px; }
-.prow { display: grid; grid-template-columns: .8fr 1.5fr .9fr 1fr 1.2fr .6fr 1fr auto; gap: 6px; align-items: center; padding: 2px; border-radius: var(--r-sm); }
+.prow { display: grid; grid-template-columns: 1fr 1.4fr 1.2fr 1fr 1.1fr .6fr 1fr auto; gap: 6px; align-items: center; padding: 2px; border-radius: var(--r-sm); }
 .prow:hover { background: var(--card); }
 .prow.th { color: var(--muted); font-size: 12px; padding: 0 12px 2px; }
 .prow.th:hover { background: none; }

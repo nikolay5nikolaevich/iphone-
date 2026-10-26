@@ -463,7 +463,7 @@ function renderProducts() {
         <label class="product-field"><span class="field-label">Цена, ₽</span><input name="price" value="${fmtPrice(p.price)}" placeholder="цена" inputmode="numeric" aria-label="Цена"></label>
         <label class="product-field"><span class="field-label">Всего, шт</span><input name="qty" value="${p.qty || 0}" inputmode="numeric" aria-label="Всего штук"></label>
         ${stockCell(p)}
-        <div class="acts"><button type="submit" title="Сохранить" aria-label="Сохранить вариант телефона">✓</button><button type="button" class="del" title="Удалить" aria-label="Удалить вариант телефона">✕</button></div>
+        <div class="acts"><button type="button" class="del" title="Удалить" aria-label="Удалить вариант телефона">✕</button></div>
       </form>`).join('')}
     </section>`;
   }).join('');
@@ -488,6 +488,8 @@ $('#productsList').addEventListener('submit', async e => {
   catch (err) { fail(err); }
 });
 $('#productsList').addEventListener('change', async e => {
+  // Изменения в строке позиции сохраняются сразу, без отдельной кнопки
+  if (e.target.closest('form.prow')) return e.target.form.requestSubmit();
   const inp = e.target.closest('.g-model'); if (!inp) return;
   const name = inp.value.trim(), old = inp.dataset.model;
   if (!name || name === old) { inp.value = old; return; }
