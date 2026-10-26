@@ -30,7 +30,9 @@ test('exported Express app serves assets, authenticates and manages accounts', a
   const sellerLogin = await request('/api/login', { method: 'POST', body: { login: 'anna', password: 'seller-password' } });
   assert.equal(sellerLogin.status, 200);
   assert.equal((await request('/api/users', { token: sellerLogin.data.token, method: 'POST', body: {} })).status, 403);
-  assert.equal((await request('/api/products', { token })).data.length, 0);
+  const seeded = (await request('/api/products', { token })).data;
+  assert.equal(seeded.length, 16);
+  assert.equal(seeded.filter(p => p.activation === 'Актив').length, 3);
   assert.equal((await request('/api/orders', { token })).data.length, 0);
   const product = await request('/api/products', { token, method: 'POST', body: { model: 'iPhone 17', storage: '256 ГБ', color: 'Black', sim: 'eSIM', qty: 2 } });
   assert.equal(product.status, 200);

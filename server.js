@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS products (
   storage TEXT NOT NULL,
   color TEXT NOT NULL,
   sim TEXT NOT NULL,
+  activation TEXT NOT NULL DEFAULT 'Не актив',
   price INTEGER,
   qty INTEGER NOT NULL DEFAULT 0
 );
@@ -32,7 +33,7 @@ CREATE TABLE IF NOT EXISTS orders (
   client TEXT NOT NULL,
   phone TEXT,
   product_id INTEGER,
-  model TEXT, storage TEXT, color TEXT, sim TEXT,
+  model TEXT, storage TEXT, color TEXT, sim TEXT, activation TEXT,
   price INTEGER,
   comment TEXT,
   seller TEXT NOT NULL,
@@ -61,6 +62,32 @@ if (!(await get('SELECT 1 FROM users WHERE role = ?', 'admin'))) {
 
 // Склад: qty — сколько штук физически есть (включая забронированные). Колонку добавляем и в старые базы.
 if (!(await all('PRAGMA table_info(products)')).some(c => c.name === 'qty')) await db.exec('ALTER TABLE products ADD COLUMN qty INTEGER NOT NULL DEFAULT 0');
+// Активация: «Актив» — уже активированный телефон, «Не актив» — новый.
+if (!(await all('PRAGMA table_info(products)')).some(c => c.name === 'activation')) await db.exec("ALTER TABLE products ADD COLUMN activation TEXT NOT NULL DEFAULT 'Не актив'");
+if (!(await all('PRAGMA table_info(orders)')).some(c => c.name === 'activation')) await db.exec('ALTER TABLE orders ADD COLUMN activation TEXT');
+const ACTIVATIONS = ['Не актив', 'Актив'];
+
+// Стартовое наличие для пустой базы: [модель, память, цвет, SIM, активация, штук]
+if (!(await get('SELECT 1 FROM products'))) {
+  for (const p of [
+    ['iPhone 15', '128 ГБ', 'Black', '2 SIM', 'Не актив', 1],
+    ['iPhone 17 Pro', '256 ГБ', 'Deep Blue', 'eSIM', 'Актив', 1],
+    ['iPhone 17 Pro', '256 ГБ', 'Deep Blue', 'eSIM', 'Не актив', 2],
+    ['iPhone 17 Pro', '512 ГБ', 'Deep Blue', 'eSIM', 'Актив', 1],
+    ['iPhone 17 Pro', '512 ГБ', 'Deep Blue', 'eSIM', 'Не актив', 1],
+    ['iPhone 17 Pro', '512 ГБ', 'Silver', 'eSIM', 'Не актив', 1],
+    ['iPhone 17 Pro', '512 ГБ', 'Deep Blue', '2 SIM', 'Актив', 1],
+    ['iPhone 17 Pro Max', '256 ГБ', 'Deep Blue', '2 SIM', 'Не актив', 1],
+    ['iPhone 17 Pro Max', '256 ГБ', 'Orange', 'eSIM', 'Не актив', 1],
+    ['iPhone 17 Pro Max', '512 ГБ', 'Orange', 'SIM + eSIM', 'Не актив', 3],
+    ['iPhone 17 Pro Max', '512 ГБ', 'Silver', 'SIM + eSIM', 'Не актив', 1],
+    ['iPhone 17 Pro Max', '512 ГБ', 'Silver', '2 SIM', 'Не актив', 2],
+    ['iPhone 17 Pro Max', '1 ТБ', 'Blue', 'SIM + eSIM', 'Не актив', 3],
+    ['iPhone 17 Pro Max', '1 ТБ', 'Deep Blue', '2 SIM', 'Не актив', 1],
+    ['iPhone 17 Pro Max', '1 ТБ', 'Orange', 'SIM + eSIM', 'Не актив', 3],
+    ['iPhone 17 Pro Max', '1 ТБ', 'Silver', '2 SIM', 'Не актив', 7],
+  ]) await run('INSERT INTO products (model, storage, color, sim, activation, qty) VALUES (?, ?, ?, ?, ?, ?)', ...p);
+}
 
 const str = v => (v == null ? '' : String(v).trim().slice(0, 500));
 const num = v => Number(String(v ?? '').replace(/\D/g, '')) || null;
@@ -100,22 +127,22 @@ app.post('/api/logout', handle(async (req, res) => { (await run('DELETE FROM ses
 // reserved — сколько штук сейчас в брони (заявки «В работе» на эту позицию)
 app.get('/api/products', handle(async (req, res) => res.json((await all(
   `SELECT p.*, (SELECT COUNT(*) FROM orders o WHERE o.product_id = p.id AND o.status = 'new') AS reserved
-   FROM products p ORDER BY model, storage, color, sim`)))));
+   FROM products p ORDER BY model, storage, color, sim, activation`)))));
 
 function productBody(b) {
-  const p = { model: str(b.model), storage: str(b.storage), color: str(b.color), sim: str(b.sim), price: num(b.price), qty: num(b.qty) ?? 0 };
+  const p = { model: str(b.model), storage: str(b.storage), color: str(b.color), sim: str(b.sim), activation: ACTIVATIONS.includes(b.activation) ? b.activation : ACTIVATIONS[0], price: num(b.price), qty: num(b.qty) ?? 0 };
   return p.model && p.storage && p.color && p.sim ? p : null;
 }
 app.post('/api/products', adminOnly, handle(async (req, res) => {
   const p = productBody(req.body);
   if (!p) return res.status(400).json({ error: 'Заполните модель, память, цвет и SIM' });
-  const r = (await run('INSERT INTO products (model, storage, color, sim, price, qty) VALUES (?, ?, ?, ?, ?, ?)', p.model, p.storage, p.color, p.sim, p.price, p.qty));
+  const r = (await run('INSERT INTO products (model, storage, color, sim, activation, price, qty) VALUES (?, ?, ?, ?, ?, ?, ?)', p.model, p.storage, p.color, p.sim, p.activation, p.price, p.qty));
   res.json({ id: Number(r.lastInsertRowid) });
 }));
 app.put('/api/products/:id', adminOnly, handle(async (req, res) => {
   const p = productBody(req.body);
   if (!p) return res.status(400).json({ error: 'Заполните модель, память, цвет и SIM' });
-  (await run('UPDATE products SET model = ?, storage = ?, color = ?, sim = ?, price = ?, qty = ? WHERE id = ?', p.model, p.storage, p.color, p.sim, p.price, p.qty, req.params.id));
+  (await run('UPDATE products SET model = ?, storage = ?, color = ?, sim = ?, activation = ?, price = ?, qty = ? WHERE id = ?', p.model, p.storage, p.color, p.sim, p.activation, p.price, p.qty, req.params.id));
   res.json({ ok: true });
 }));
 app.delete('/api/products/:id', adminOnly, handle(async (req, res) => {
@@ -173,7 +200,7 @@ async function orderBody(b, old) {
   if (!seller) return { error: 'Впишите продавца — чей это телефон' };
   return {
     date, time: str(b.time), client, phone: str(b.phone),
-    product_id: product.id, model: product.model, storage: product.storage, color: product.color, sim: product.sim,
+    product_id: product.id, model: product.model, storage: product.storage, color: product.color, sim: product.sim, activation: product.activation,
     price: num(b.price) ?? product.price, comment: str(b.comment), seller,
     status: STATUSES.includes(b.status) ? b.status : 'new',
   };

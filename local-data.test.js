@@ -120,3 +120,13 @@ test('reports storage failures, preserves corrupted data and retries failed migr
   await data.request('/products', {}, admin);
   assert.equal(fresh.values.has(DATA_KEY), true);
 });
+
+test('activation is stored on products, copied to orders and defaults for old data', async () => {
+  const { request, values } = setup();
+  await request('/products');
+  assert.equal((await request('/products'))[0].activation, 'Не актив');
+  const { id } = await request('/products', 'POST', { ...product, activation: 'Актив' });
+  await request('/orders', 'POST', { ...order, product_id: id });
+  assert.equal((await request('/orders'))[0].activation, 'Актив');
+  assert.equal(JSON.parse(values.get(DATA_KEY)).products.length, 2);
+});

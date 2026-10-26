@@ -1,5 +1,6 @@
 // Заявки и склад общие для аккаунтов в пределах этого браузера и адреса сайта.
 export const DATA_KEY = 'iphone-zayavki:data:v1';
+export const ACTIVATIONS = ['Не актив', 'Актив'];
 
 export function createLocalData(storage, remote) {
   let initializing;
@@ -22,6 +23,8 @@ export function createLocalData(storage, remote) {
       || (data.nextProductId !== undefined && (!Number.isSafeInteger(data.nextProductId) || data.nextProductId < 1))) {
       throw new Error('Неверный формат базы');
     }
+    // Старые копии без активации считаем неактивированными.
+    for (const p of data.products) if (!ACTIVATIONS.includes(p.activation)) p.activation = ACTIVATIONS[0];
     return data;
   }
   function read() {
@@ -80,7 +83,7 @@ export function createLocalData(storage, remote) {
       if (resource === 'products') {
         if (method === 'GET') return data.products.map(p => ({ ...p,
           reserved: data.orders.filter(o => o.product_id === p.id && o.status === 'new').length,
-        })).sort((a, b) => [a.model, a.storage, a.color, a.sim].join().localeCompare([b.model, b.storage, b.color, b.sim].join()));
+        })).sort((a, b) => [a.model, a.storage, a.color, a.sim, a.activation].join().localeCompare([b.model, b.storage, b.color, b.sim, b.activation].join()));
         if (user.role !== 'admin') error('Только для админа');
         const index = data.products.findIndex(p => p.id === Number(id));
         if (method !== 'POST' && index < 0) error('Телефон не найден');
@@ -88,7 +91,7 @@ export function createLocalData(storage, remote) {
         else if (method === 'POST' || method === 'PUT') {
           const product = Object.fromEntries(['model', 'storage', 'color', 'sim'].map(k => [k, text(body[k])]));
           if (Object.values(product).some(v => !v)) error('Заполните модель, память, цвет и SIM');
-          Object.assign(product, { price: number(body.price), qty: number(body.qty) ?? 0,
+          Object.assign(product, { activation: ACTIVATIONS.includes(body.activation) ? body.activation : ACTIVATIONS[0], price: number(body.price), qty: number(body.qty) ?? 0,
             id: method === 'POST' ? Math.max(data.nextProductId || 1, ...data.products.map(p => p.id + 1)) : Number(id) });
           if (method === 'POST') {
             data.products.push(product);
@@ -117,7 +120,7 @@ export function createLocalData(storage, remote) {
           if (!/^\d{4}-\d{2}-\d{2}$/.test(order.date) || !order.client) error('Дата и имя клиента обязательны');
           if (!order.seller) error('Впишите продавца — чей это телефон');
           Object.assign(order, { id: old?.id || crypto.randomUUID(), created_at: old?.created_at || new Date().toISOString(),
-            product_id: product.id, model: product.model, storage: product.storage, color: product.color, sim: product.sim,
+            product_id: product.id, model: product.model, storage: product.storage, color: product.color, sim: product.sim, activation: product.activation,
             price: number(body.price) ?? product.price, status: ['new', 'sold', 'cancel'].includes(body.status) ? body.status : 'new' });
           if (holds(order.status) && !(old && holds(old.status) && old.product_id === order.product_id)) {
             const current = data.products.find(p => p.id === order.product_id);

@@ -120,6 +120,7 @@
           <label>Память<input name="storage" placeholder="256 ГБ" list="storageList" autocomplete="off" required></label>
           <label>Цвет<input name="color" placeholder="Deep Blue" list="colorList" autocomplete="off" required></label>
           <label>SIM<input name="sim" placeholder="2 SIM" list="simList" autocomplete="off" required></label>
+          <label>Активация<select name="activation"><option>Не актив</option><option>Актив</option></select></label>
           <label>Цена, ₽<input name="price" placeholder="0" inputmode="numeric"></label>
           <label>Штук<input name="qty" placeholder="1" inputmode="numeric"></label>
           <button class="btn primary" type="submit">+ Добавить</button>
@@ -172,6 +173,7 @@
       <label>Память<select id="pStorage" required></select></label>
       <label>Цвет<select id="pColor" required></select></label>
       <label>SIM<select id="pSim" required></select></label>
+      <label>Активация<select id="pActivation" required></select></label>
     </div>
     <p id="stockHint" class="stock-hint"></p>
     <p id="noProducts" class="err hidden">В базе нет телефонов — админ должен добавить их во вкладке «База».</p>

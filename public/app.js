@@ -1,4 +1,4 @@
-import { createLocalData, DATA_KEY } from './local-data.js';
+import { createLocalData, DATA_KEY, ACTIVATIONS } from './local-data.js';
 
 // Подсказки для админа при заполнении базы (в заявках выбор — только из базы)
 const MODEL_HINTS = ['iPhone 17 Pro Max', 'iPhone 17 Pro', 'iPhone Air', 'iPhone 17', 'iPhone 16 Pro Max', 'iPhone 16 Pro',
@@ -170,7 +170,7 @@ function card(o, withDate = false) {
   const tel = (o.phone || '').replace(/[^\d+]/g, '');
   const late = isLate(o), d = parse(o.date);
   const when = withDate ? `${d.getDate()} ${MON_SHORT[d.getMonth()]}${o.time ? ' · ' + o.time : ''}` : o.time;
-  const specs = [o.storage, o.color, o.sim].filter(Boolean)
+  const specs = [o.storage, o.color, o.sim, o.activation].filter(Boolean)
     .map(s => s === o.color && swatch(s) ? `<span><i class="sw" style="background:${swatch(s)}"></i>${esc(s)}</span>` : `<span>${esc(s)}</span>`);
   return `<div class="card ${o.status} ${late ? 'late' : ''}" data-id="${o.id}" style="--seller:${sellerColor(o.seller)}">
     <div class="c-head">
@@ -441,7 +441,7 @@ function stockSum(ps) {
 // Название в шапке группы (админ) переименовывает все позиции модели.
 function renderProducts() {
   const q = $('#productSearch').value.trim().toLowerCase(), admin = isAdmin();
-  const list = state.products.filter(p => !q || [p.model, p.storage, p.color, p.sim].join(' ').toLowerCase().includes(q));
+  const list = state.products.filter(p => !q || [p.model, p.storage, p.color, p.sim, p.activation].join(' ').toLowerCase().includes(q));
   $('#productsMeta').innerHTML = `${plural(state.products.length, 'позиция', 'позиции', 'позиций')} · ${plural(uniq(state.products.map(p => p.model)).length, 'модель', 'модели', 'моделей')} · ${stockSum(state.products)}`;
   if (!list.length) { $('#productsList').innerHTML = `<div class="empty">${state.products.length ? 'Ничего не найдено' : admin ? 'База пуста — добавьте первый телефон сверху' : 'База пуста — телефоны добавляет админ'}</div>`; return; }
   $('#productsList').innerHTML = uniq(list.map(p => p.model)).map(m => {
@@ -451,8 +451,8 @@ function renderProducts() {
     if (!admin) return `<section class="pgroup">
       <div class="pg-head"><h3 class="g-title">${esc(m)}</h3></div>
       <div class="pg-stock">${stockSum(ps)}</div>
-      <div class="prow ro th"><span>Память</span><span>Цвет</span><span>SIM</span><span>Наличие</span></div>
-      ${ps.map(p => `<div class="prow ro"><span data-label="Память">${esc(p.storage)}</span><span data-label="Цвет">${color(p)} ${esc(p.color)}</span><span data-label="SIM">${esc(p.sim)}</span>${stockCell(p)}</div>`).join('')}
+      <div class="prow ro th"><span>Память</span><span>Цвет</span><span>SIM</span><span>Активация</span><span>Наличие</span></div>
+      ${ps.map(p => `<div class="prow ro"><span data-label="Память">${esc(p.storage)}</span><span data-label="Цвет">${color(p)} ${esc(p.color)}</span><span data-label="SIM">${esc(p.sim)}</span><span data-label="Активация">${esc(p.activation)}</span>${stockCell(p)}</div>`).join('')}
     </section>`;
     return `<section class="pgroup">
       <div class="pg-head">
@@ -460,12 +460,13 @@ function renderProducts() {
         <span class="pg-meta">${plural(ps.length, 'вариант', 'варианта', 'вариантов')}${prices.length ? ' · ' + (lo === hi ? money(lo) : `${fmtPrice(lo)} – ${money(hi)}`) : ''}</span>
       </div>
       <div class="pg-stock">${stockSum(ps)}</div>
-      <div class="prow th"><span>Память</span><span>Цвет</span><span>SIM</span><span>Цена, ₽</span><span>Всего, шт</span><span>Наличие</span><span></span></div>
+      <div class="prow th"><span>Память</span><span>Цвет</span><span>SIM</span><span>Активация</span><span>Цена, ₽</span><span>Всего, шт</span><span>Наличие</span><span></span></div>
       ${ps.map(p => `<form class="prow" data-id="${p.id}">
         <input type="hidden" name="model" value="${esc(p.model)}">
         <label class="product-field"><span class="field-label">Память</span><input name="storage" value="${esc(p.storage)}" list="storageList" required aria-label="Память"></label>
         <label class="product-field"><span class="field-label">Цвет</span><span class="color-cell">${color(p)}<input name="color" value="${esc(p.color)}" list="colorList" required aria-label="Цвет"></span></label>
         <label class="product-field"><span class="field-label">SIM</span><input name="sim" value="${esc(p.sim)}" list="simList" required aria-label="SIM"></label>
+        <label class="product-field"><span class="field-label">Активация</span><select name="activation" aria-label="Активация">${ACTIVATIONS.map(a => `<option${a === p.activation ? ' selected' : ''}>${a}</option>`).join('')}</select></label>
         <label class="product-field"><span class="field-label">Цена, ₽</span><input name="price" value="${fmtPrice(p.price)}" placeholder="цена" inputmode="numeric" aria-label="Цена"></label>
         <label class="product-field"><span class="field-label">Всего, шт</span><input name="qty" value="${p.qty || 0}" inputmode="numeric" aria-label="Всего штук"></label>
         ${stockCell(p)}
@@ -566,8 +567,8 @@ $('#usersList').addEventListener('click', async e => {
 
 // ---------- форма заявки: телефон выбирается только из базы ----------
 const form = $('#orderForm'), dlg = $('#dlg');
-const sel = { model: $('#pModel'), storage: $('#pStorage'), color: $('#pColor'), sim: $('#pSim') };
-const LEVELS = ['model', 'storage', 'color', 'sim'];
+const sel = { model: $('#pModel'), storage: $('#pStorage'), color: $('#pColor'), sim: $('#pSim'), activation: $('#pActivation') };
+const LEVELS = ['model', 'storage', 'color', 'sim', 'activation'];
 let extraProduct = null; // позиция заявки, которую уже удалили из базы
 
 function catalog() { return extraProduct ? [...state.products, extraProduct] : state.products; }
@@ -604,7 +605,7 @@ function openForm(o, date) {
   $('#copyBtn').classList.toggle('hidden', !o);
 
   extraProduct = o && !state.products.some(p => p.id === o.product_id)
-    ? { id: o.product_id, model: o.model, storage: o.storage, color: o.color, sim: o.sim, price: o.price } : null;
+    ? { id: o.product_id, model: o.model, storage: o.storage, color: o.color, sim: o.sim, activation: o.activation || ACTIVATIONS[0], price: o.price } : null;
   $('#noProducts').classList.toggle('hidden', catalog().length > 0);
   $('#saveBtn').disabled = !catalog().length;
   cascade(0, o || {}, !o);
@@ -647,7 +648,7 @@ $('#copyBtn').onclick = async () => {
     `📅 ${dn.toUpperCase()} · ${dd}${o.time ? ' · ' + o.time : ''}`,
     `👤 ${o.client}`,
     o.phone && `📞 ${o.phone}`,
-    `📱 ${[o.model, o.storage, o.color, o.sim].filter(Boolean).join(' · ')}`,
+    `📱 ${[o.model, o.storage, o.color, o.sim, o.activation].filter(Boolean).join(' · ')}`,
     o.price && `💰 ${money(o.price)}`,
     o.comment && `⚠️ ${o.comment}`,
     `🧑‍💼 от ${o.seller}`,
