@@ -11,3 +11,4 @@ data.db
 !.env.example
 *.log
 .artifacts/
+dist/

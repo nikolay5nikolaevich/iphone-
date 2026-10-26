@@ -1,4 +1,5 @@
 import { createLocalData, DATA_KEY, ACTIVATIONS } from './local-data.js';
+import { createLocalAuth } from './local-auth.js';
 
 // Подсказки для админа при заполнении базы (в заявках выбор — только из базы)
 const MODEL_HINTS = ['iPhone 17 Pro Max', 'iPhone 17 Pro', 'iPhone Air', 'iPhone 17', 'iPhone 16 Pro Max', 'iPhone 16 Pro',
@@ -85,7 +86,7 @@ function formatPhone(v) {
 const localData = createLocalData({
   getItem: key => localStorage.getItem(key),
   setItem: (key, value) => localStorage.setItem(key, value),
-}, serverApi);
+}, path => path === '/users' ? serverApi(path) : []);
 
 async function api(path, opts = {}) {
   if (/^\/(products|orders|sellers)(\/|\?|$)/.test(path)) {
@@ -96,16 +97,10 @@ async function api(path, opts = {}) {
   return serverApi(path, opts);
 }
 
+const localAuth = createLocalAuth(localStorage);
 async function serverApi(path, opts = {}) {
-  const res = await fetch('/api' + path, {
-    ...opts,
-    headers: { 'Content-Type': 'application/json', 'x-token': state.token || '' },
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
-  });
-  if (res.status === 401 && path !== '/login') { showLogin(); throw new Error('auth'); }
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Ошибка');
-  return data;
+  try { return await localAuth(path, opts, state.token); }
+  catch (err) { if (err.message === 'auth') showLogin(); throw err; }
 }
 const fail = err => { if (err.message !== 'auth') toast(err.message); };
 
@@ -120,9 +115,7 @@ $('#loginForm').onsubmit = async e => {
     $('#loginPass').value = '';
     start();
   } catch (err) {
-    $('#loginErr').textContent = location.protocol === 'file:'
-      ? 'Файл открыт напрямую. Запустите npm start и откройте http://localhost:3000'
-      : err.message === 'Failed to fetch' ? 'Сервер не отвечает — запущен ли npm start?' : err.message;
+    $('#loginErr').textContent = err.message;
   }
 };
 function showLogin() {
