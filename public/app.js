@@ -15,7 +15,7 @@ const STATUS_LABEL = { new: 'В работе', sold: 'Продано', cancel: '
 const DW = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 const MON_SHORT = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
 // Образцы цветов для базы и карточек; у неизвестного цвета кружка нет
-const SWATCH = { 'cosmic orange': '#e8743b', 'deep blue': '#34466b', silver: '#d9dadc', black: '#1f1f22', white: '#f2f2f0',
+const SWATCH = { 'cosmic orange': '#e8743b', orange: '#e8743b', blue: '#3b6fd8', 'deep blue': '#34466b', silver: '#d9dadc', black: '#1f1f22', white: '#f2f2f0',
   lavender: '#c9b8e8', sage: '#a9b89a', 'mist blue': '#a8c0d8', 'sky blue': '#b6d4ec', 'light gold': '#e8d8b0', 'space black': '#2b2b2e',
   'natural titanium': '#bdb6aa', 'desert titanium': '#c9ad8f', desert: '#c9ad8f', 'black titanium': '#3a3a3c', 'white titanium': '#e6e4df',
   ultramarine: '#5468d8', teal: '#5fa8a6', pink: '#f2b8c6' };
@@ -431,7 +431,8 @@ function renderProducts() {
   $('#productsMeta').innerHTML = `${plural(state.products.length, 'позиция', 'позиции', 'позиций')} · ${plural(uniq(state.products.map(p => p.model)).length, 'модель', 'модели', 'моделей')} · ${stockSum(state.products)}`;
   if (!list.length) { $('#productsList').innerHTML = `<div class="empty">${state.products.length ? 'Ничего не найдено' : admin ? 'База пуста — добавьте первый телефон сверху' : 'База пуста — телефоны добавляет админ'}</div>`; return; }
   $('#productsList').innerHTML = uniq(list.map(p => p.model)).map(m => {
-    const ps = list.filter(p => p.model === m), prices = ps.map(p => p.price).filter(Boolean);
+    // Сначала большие объёмы: 1 ТБ, 512 ГБ, 256 ГБ…
+    const ps = list.filter(p => p.model === m).sort((a, b) => STORAGE_ORDER(b.storage) - STORAGE_ORDER(a.storage)), prices = ps.map(p => p.price).filter(Boolean);
     const lo = Math.min(...prices), hi = Math.max(...prices);
     const color = p => `<i class="sw" style="background:${swatch(p.color) || 'transparent'}"></i>`;
     // При поиске раскрываем всё найденное, иначе — только то, что открыли вручную
