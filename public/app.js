@@ -25,6 +25,8 @@ const SWATCH = { 'cosmic orange': '#e8743b', orange: '#e8743b', blue: '#3b6fd8',
 const $ = s => document.querySelector(s);
 const tg = window.Telegram?.WebApp;
 tg?.ready(); tg?.expand();
+// Шапка Телеграма в цвет сайта; свайп вниз прокручивает список, а не закрывает мини-апп
+tg?.setHeaderColor?.('#17181c'); tg?.setBackgroundColor?.('#17181c'); tg?.disableVerticalSwipes?.();
 
 const store = {
   get: k => { try { return localStorage.getItem(k); } catch { return null; } },
