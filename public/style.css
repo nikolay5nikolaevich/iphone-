@@ -479,3 +479,10 @@ label { display: grid; gap: 6px; font-size: 13px; color: var(--muted); font-weig
 #week .card { -webkit-touch-callout: none; user-select: none; }
 .card.dragging { position: relative; z-index: 50; pointer-events: none; opacity: .9; box-shadow: 0 12px 30px rgba(0,0,0,.5); }
 .ag.drop { box-shadow: 0 0 0 2px var(--link); }
+
+/* Мои заказы: выплата продавцу */
+.prow-pay { display: grid; grid-template-columns: minmax(0, 1.6fr) repeat(3, minmax(0, 1fr)); gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid var(--card-2); font-size: 13px; }
+.prow-pay > span:not(:first-child) { text-align: right; }
+.prow-pay small { display: block; color: var(--muted); font-size: 11px; }
+.prow-pay.th { border-top: 0; color: var(--muted); font-size: 12px; padding-top: 0; }
+.prow-pay.total { font-weight: 700; border-top-width: 2px; }

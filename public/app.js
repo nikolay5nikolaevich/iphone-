@@ -371,11 +371,28 @@ function renderMine() {
       title: o.date === today ? `Сегодня · ${dayTitle(o.date)}` : o.date === tomorrow ? `Завтра · ${dayTitle(o.date)}` : dayTitle(o.date) });
     g.items.push(o);
   }
-  html += groups.length
+  const body = groups.length
     ? groups.map(g => `<section class="grp"><h3 class="grp-title ${g.red ? 'red' : ''}">${esc(g.title)}<span>${g.items.length}</span></h3>
         <div class="cards">${g.items.map(o => card(o, g.withDate)).join('')}</div></section>`).join('')
     : `<div class="empty">${f === 'active' ? 'Активных заявок нет — нажмите «Новая заявка»' : 'Заявок нет'}</div>`;
+  html += f === 'sold' && sold.length ? `<div class="week-layout"><div>${body}</div><div class="side">${payout(sold)}</div></div>` : body;
   $('#mineList').innerHTML = html;
+}
+// Выплата продавцу: по каждому проданному телефону — цена продажи, цена из базы и разница, которую платим продавцу.
+// ponytail: цена базы берётся текущая, не на момент продажи — сохранять её в заявке, если цены в базе будут меняться задним числом
+function payout(sold) {
+  const rows = sold.flatMap(o => [o, ...(o.extras || [])].map(x => {
+    const base = state.products.find(p => p.id === x.product_id)?.price || 0;
+    return { o, x, base, sale: x.price || 0 };
+  }));
+  const tot = rows.reduce((t, r) => ({ sale: t.sale + r.sale, base: t.base + r.base }), { sale: 0, base: 0 });
+  return `<div class="box"><h3>Выплатить ${esc(sold[0].seller)}</h3>
+    <div class="prow-pay th"><span>Телефон</span><span>Продано</span><span>База</span><span>К выплате</span></div>
+    ${rows.map(r => `<div class="prow-pay"><span>${esc([r.x.model, r.x.storage, r.x.color].filter(Boolean).join(' · '))}<small>${esc(dayTitle(r.o.date))} · ${esc(r.o.client)}</small></span>
+      <span class="num">${money(r.sale)}</span><span class="num muted">${r.base ? money(r.base) : '—'}</span><span class="num green">${r.base ? money(r.sale - r.base) : '—'}</span></div>`).join('')}
+    <div class="prow-pay total"><span>Итого · ${plural(rows.length, 'телефон', 'телефона', 'телефонов')}</span>
+      <span class="num">${money(tot.sale)}</span><span class="num muted">${money(tot.base)}</span><span class="num green">${money(tot.sale - tot.base)}</span></div>
+  </div>`;
 }
 $('#mineName').value = store.get('sellerName') || '';
 $('#mineName').oninput = () => { store.set('sellerName', $('#mineName').value.trim()); renderMine(); };
