@@ -22,7 +22,7 @@ export function createLocalData(storage, remote, stock = STOCK) {
         && Number.isSafeInteger(p.qty) && p.qty >= 0 && (p.price === null || Number.isFinite(p.price)))
       || !data.orders.every(o => o && typeof o.id === 'string'
         && ['date', 'client', 'seller', 'model', 'storage', 'color', 'sim'].every(k => typeof o[k] === 'string')
-        && /^\d{4}-\d{2}-\d{2}$/.test(o.date) && ['new', 'sold', 'cancel'].includes(o.status)
+        && /^(\d{4}-\d{2}-\d{2})?$/.test(o.date) && ['new', 'sold', 'cancel'].includes(o.status)
         && (o.price === null || Number.isFinite(o.price)) && (o.extras === undefined || Array.isArray(o.extras)))
       || new Set(data.products.map(p => p.id)).size !== data.products.length
       || new Set(data.orders.map(o => o.id)).size !== data.orders.length
@@ -124,7 +124,8 @@ export function createLocalData(storage, remote, stock = STOCK) {
       } else if (resource === 'orders') {
         if (method === 'GET') {
           const from = url.searchParams.get('from'), to = url.searchParams.get('to');
-          return data.orders.filter(o => !(from && to) || (o.date >= from && o.date <= to))
+          // Заявки с плавающей датой (date === '') видны в любой неделе
+          return data.orders.filter(o => !(from && to) || !o.date || (o.date >= from && o.date <= to))
             .sort((a, b) => (from && to ? 1 : -1) * (a.date.localeCompare(b.date) || (a.time || '').localeCompare(b.time || '')));
         }
         const index = data.orders.findIndex(o => o.id === id);
@@ -143,7 +144,7 @@ export function createLocalData(storage, remote, stock = STOCK) {
               price: number(price) ?? product.price };
           };
           const order = Object.fromEntries(['date', 'time', 'client', 'phone', 'comment', 'seller'].map(k => [k, text(body[k])]));
-          if (!/^\d{4}-\d{2}-\d{2}$/.test(order.date) || !order.client) error('Дата и имя клиента обязательны');
+          if (!/^(\d{4}-\d{2}-\d{2})?$/.test(order.date) || !order.client) error('Укажите имя клиента');
           if (!order.seller) error('Впишите продавца — чей это телефон');
           Object.assign(order, { id: old?.id || crypto.randomUUID(), created_at: old?.created_at || new Date().toISOString(),
             ...pick(body.product_id, body.price),

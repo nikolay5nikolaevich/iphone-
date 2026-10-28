@@ -127,6 +127,8 @@ select.pill { appearance: none; padding-right: 40px; cursor: pointer;
 .agenda { display: grid; gap: 10px; }
 .side { display: grid; gap: 12px; position: sticky; top: 84px; }
 .ag { background: var(--panel); border-radius: var(--r-lg); }
+/* отступ от воскресенья */
+.ag.float { margin-top: 14px; }
 .ag.today { box-shadow: 0 0 0 2px #fff; }
 .ag-head { width: 100%; display: flex; align-items: center; gap: 14px; padding: 12px 16px; border: 0; background: transparent;
   text-align: left; border-radius: var(--r-lg); min-height: 64px; transition: background .15s; }

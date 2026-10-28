@@ -61,14 +61,14 @@ function sellerColor(name) {
   let h = 0; for (const c of name || '') h = (h * 31 + c.charCodeAt(0)) % 360;
   return `hsl(${h} 70% 60%)`;
 }
-function dayTitle(s) { const d = parse(s); return `${DAYS[(d.getDay() + 6) % 7]} · ${d.getDate()} ${MONTHS[d.getMonth()]}`; }
+function dayTitle(s) { if (!s) return 'Плавающая дата'; const d = parse(s); return `${DAYS[(d.getDay() + 6) % 7]} · ${d.getDate()} ${MONTHS[d.getMonth()]}`; }
 function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('show'), 1800); }
 const swatch = c => SWATCH[String(c || '').trim().toLowerCase()] || '';
 const short = n => n >= 1e6 ? (n / 1e6).toFixed(1).replace('.0', '') + ' млн' : n >= 1000 ? Math.round(n / 1000) + 'к' : String(n || 0);
 // ponytail: выручка учитывает доп. телефоны, а счётчики «шт» считают заявки — поправить, если важно
 const sumOf = l => l.reduce((s, o) => s + (o.price || 0) + (o.extras || []).reduce((t, x) => t + (x.price || 0), 0), 0);
 const byTime = (a, b) => (a.time || '99').localeCompare(b.time || '99');
-const isLate = o => o.status === 'new' && o.date < iso(new Date());
+const isLate = o => o.status === 'new' && !!o.date && o.date < iso(new Date());
 const plural = (n, one, few, many) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? one : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? few : many}`;
 const fmtPrice = v => { const n = String(v ?? '').replace(/\D/g, ''); return n ? Number(n).toLocaleString('ru-RU') : ''; };
 
@@ -160,7 +160,7 @@ async function render() {
 function card(o, withDate = false) {
   const tel = (o.phone || '').replace(/[^\d+]/g, '');
   const late = isLate(o), d = parse(o.date);
-  const when = withDate ? `${d.getDate()} ${MON_SHORT[d.getMonth()]}${o.time ? ' · ' + o.time : ''}` : o.time;
+  const when = withDate && !o.date ? 'плав. дата' : withDate ? `${d.getDate()} ${MON_SHORT[d.getMonth()]}${o.time ? ' · ' + o.time : ''}` : o.time;
   const device = x => {
     const specs = [x.storage, x.color, x.sim, x.activation, x.city].filter(Boolean)
       .map(s => s === x.color && swatch(s) ? `<span><i class="sw" style="background:${swatch(s)}"></i>${esc(s)}</span>` : `<span>${esc(s)}</span>`);
@@ -243,17 +243,19 @@ function renderWeek() {
   $('#weekSum').textContent = (list.length ? plural(list.length, 'заявка', 'заявки', 'заявок') : 'Заявок пока нет') + (filter ? ` · ${filter}` : '');
   $('#weekKpis').innerHTML = kpis(list);
 
-  $('#week').innerHTML = keys.map((key, i) => {
+  // В конце недели — заявки с плавающей датой (key === '')
+  $('#week').innerHTML = [...keys, ''].map((key, i) => {
     // В дне: сначала проданные, потом в работе, отказы — в конце (правее)
     const d = parse(key), items = list.filter(o => o.date === key).sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || byTime(a, b));
     const rel = { [today]: 'Сегодня', [tomorrow]: 'Завтра', [yesterday]: 'Вчера' }[key];
-    const name = rel ? `${rel}<span class="ag-dw">${DAYS[i].toLowerCase()}</span>` : DAYS[i];
-    const cls = `${key === today ? 'today' : ''} ${key < today ? 'past' : ''}`;
+    const name = !key ? 'Плавающая дата' : rel ? `${rel}<span class="ag-dw">${DAYS[i].toLowerCase()}</span>` : DAYS[i];
+    const cls = `${key === today ? 'today' : ''} ${key && key < today ? 'past' : ''} ${key ? '' : 'float'}`;
+    const num = key ? d.getDate() : '∞';
     if (!items.length) return `<div class="ag blank ${cls}"><div class="ag-head">
-      <span class="ag-num">${d.getDate()}</span><span class="ag-name">${name}</span><span class="ag-sub">заявок нет</span>
+      <span class="ag-num">${num}</span><span class="ag-name">${name}</span><span class="ag-sub">заявок нет</span>
       <button class="add-day" data-date="${key}">+ Заявка</button></div></div>`;
     // На текущей неделе прошедшие дни свёрнуты в итог; клик по дню меняет это для него
-    const open = !(hasToday && key < today) !== state.flipped.has(key);
+    const open = !(hasToday && key && key < today) !== state.flipped.has(key);
     const sold = items.filter(o => o.status === 'sold'), late = items.filter(isLate).length;
     const sub = [plural(items.length, 'заявка', 'заявки', 'заявок'),
       sold.length && `продано ${sold.length} на ${money(sumOf(sold))}`,
@@ -261,7 +263,7 @@ function renderWeek() {
     const mix = ['sold', 'new', 'cancel'].map(s => { const n = items.filter(o => o.status === s).length; return n ? `<i class="${s}" style="flex:${n}"></i>` : ''; }).join('');
     return `<div class="ag ${cls} ${open ? 'open' : ''}">
       <button class="ag-head" data-toggle="${key}" aria-expanded="${open}">
-        <span class="ag-num">${d.getDate()}</span>
+        <span class="ag-num">${num}</span>
         <span class="ag-title"><span class="ag-name">${name}</span><span class="ag-sub">${sub}</span></span>
         <span class="mix">${mix}</span><span class="chev">›</span>
       </button>
@@ -650,7 +652,7 @@ function openForm(o, date) {
   // Продавец вписывается руками (аккаунт общий); по умолчанию — имя из «Моих заказов»
   form.seller.value = o ? o.seller : store.get('sellerName') || '';
 
-  const v = o || { date: date || iso(new Date()), status: 'new' };
+  const v = o || { date: date ?? iso(new Date()), status: 'new' };
   for (const k of ['date', 'time', 'client', 'phone', 'comment']) if (v[k] != null) form[k].value = v[k];
   if (o) form.price.value = fmtPrice(o.price);
   renderCart();
@@ -670,7 +672,7 @@ form.onsubmit = async e => {
     else await api('/orders', { method: 'POST', body });
     dlg.close();
     toast(state.editing ? 'Сохранено' : 'Заявка добавлена');
-    if (!state.editing && state.view === 'week') state.weekStart = mondayOf(parse(body.date));
+    if (!state.editing && state.view === 'week' && body.date) state.weekStart = mondayOf(parse(body.date));
     render().catch(fail);
   } catch (err) { fail(err); }
 };

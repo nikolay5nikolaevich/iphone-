@@ -92,7 +92,7 @@ test('rejects unauthorized operations and invalid orders without changing data',
   await request('/products');
   const before = values.get(DATA_KEY);
   await assert.rejects(request('/products', 'POST', product, seller), /Только для админа/);
-  await assert.rejects(request('/orders', 'POST', { ...order, client: '' }), /обязательны/);
+  await assert.rejects(request('/orders', 'POST', { ...order, client: '' }), /имя клиента/);
   await assert.rejects(request('/products', 'GET', null, null), /Нужен вход/);
   assert.equal(values.get(DATA_KEY), before);
 });
