@@ -468,3 +468,8 @@ label { display: grid; gap: 6px; font-size: 13px; color: var(--muted); font-weig
 @media (min-width: 375px) and (max-width: 640px) {
   #orderForm > .grid2:nth-child(2), #orderForm .grid3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }
+
+.cart-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.cart-list li { display: flex; align-items: center; gap: 10px; font-size: 13px; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,.05); }
+.cart-list li span { flex: 1; min-width: 0; }
+.cart-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }

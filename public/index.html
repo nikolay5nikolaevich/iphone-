@@ -183,6 +183,11 @@
       <label>💰 Цена, ₽<input name="price" inputmode="numeric" placeholder="из базы"></label>
       <label>🧑‍💼 Продавец — чей телефон<input name="seller" list="sellerList" required placeholder="Впишите имя" autocomplete="off"></label>
     </div>
+    <div id="cartBox" class="hidden"><ul id="cartList" class="cart-list"></ul></div>
+    <div class="cart-foot">
+      <button type="button" class="btn ghost" id="addPhoneBtn">＋ Ещё телефон</button>
+      <b id="cartTotal"></b>
+    </div>
     <label>⚠️ Комментарий / договорённость<textarea name="comment" rows="2" placeholder="По наличию скинуть фото задней части коробки"></textarea></label>
 
     <div class="status-pick" id="statusPick" role="group" aria-label="Статус заявки">
