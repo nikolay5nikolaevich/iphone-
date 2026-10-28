@@ -65,7 +65,8 @@ function dayTitle(s) { const d = parse(s); return `${DAYS[(d.getDay() + 6) % 7]}
 function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => el.classList.remove('show'), 1800); }
 const swatch = c => SWATCH[String(c || '').trim().toLowerCase()] || '';
 const short = n => n >= 1e6 ? (n / 1e6).toFixed(1).replace('.0', '') + ' млн' : n >= 1000 ? Math.round(n / 1000) + 'к' : String(n || 0);
-const sumOf = l => l.reduce((s, o) => s + (o.price || 0), 0);
+// ponytail: выручка учитывает доп. телефоны, а счётчики «шт» считают заявки — поправить, если важно
+const sumOf = l => l.reduce((s, o) => s + (o.price || 0) + (o.extras || []).reduce((t, x) => t + (x.price || 0), 0), 0);
 const byTime = (a, b) => (a.time || '99').localeCompare(b.time || '99');
 const isLate = o => o.status === 'new' && o.date < iso(new Date());
 const plural = (n, one, few, many) => `${n} ${n % 10 === 1 && n % 100 !== 11 ? one : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? few : many}`;
@@ -160,8 +161,15 @@ function card(o, withDate = false) {
   const tel = (o.phone || '').replace(/[^\d+]/g, '');
   const late = isLate(o), d = parse(o.date);
   const when = withDate ? `${d.getDate()} ${MON_SHORT[d.getMonth()]}${o.time ? ' · ' + o.time : ''}` : o.time;
-  const specs = [o.storage, o.color, o.sim, o.activation, o.city].filter(Boolean)
-    .map(s => s === o.color && swatch(s) ? `<span><i class="sw" style="background:${swatch(s)}"></i>${esc(s)}</span>` : `<span>${esc(s)}</span>`);
+  const device = x => {
+    const specs = [x.storage, x.color, x.sim, x.activation, x.city].filter(Boolean)
+      .map(s => s === x.color && swatch(s) ? `<span><i class="sw" style="background:${swatch(s)}"></i>${esc(s)}</span>` : `<span>${esc(s)}</span>`);
+    return `<div class="c-device">
+      <div class="c-model">${esc(x.model || '—')}${o.extras?.length && x.price ? ` · ${money(x.price)}` : ''}</div>
+      ${specs.length ? `<div class="c-specs">${specs.join('')}</div>` : ''}
+    </div>`;
+  };
+  const total = sumOf([o]);
   return `<div class="card ${o.status} ${late ? 'late' : ''}" data-id="${o.id}" style="--seller:${sellerColor(o.seller)}">
     <div class="c-head">
       <span class="c-time ${when ? '' : 'none'} ${withDate ? 'dated' : ''}">${when ? esc(when) : 'без времени'}</span>
@@ -171,14 +179,11 @@ function card(o, withDate = false) {
       <div class="c-name">${esc(o.client)}</div>
       ${o.phone ? `<a class="c-phone" href="tel:${esc(tel)}" onclick="event.stopPropagation()">${esc(o.phone)}</a>` : ''}
     </div>
-    <div class="c-device">
-      <div class="c-model">${esc(o.model || '—')}</div>
-      ${specs.length ? `<div class="c-specs">${specs.join('')}</div>` : ''}
-    </div>
+    ${[o, ...(o.extras || [])].map(device).join('')}
     ${o.comment ? `<div class="c-comment">${esc(o.comment)}</div>` : ''}
     <div class="c-foot">
       <span class="c-seller"><span class="dot"></span>${esc(o.seller)}</span>
-      <span class="c-price">${o.price ? money(o.price) : ''}</span>
+      <span class="c-price">${total ? money(total) : ''}</span>
     </div>
   </div>`;
 }
@@ -582,7 +587,7 @@ $('#usersList').addEventListener('click', async e => {
 const form = $('#orderForm'), dlg = $('#dlg');
 const sel = { city: $('#pCity'), model: $('#pModel'), storage: $('#pStorage'), color: $('#pColor'), sim: $('#pSim'), activation: $('#pActivation') };
 const LEVELS = ['city', 'model', 'storage', 'color', 'sim', 'activation'];
-let cart = []; // уже выбранные телефоны новой заявки: { product_id, price }
+let cart = []; // доп. телефоны заявки: { product_id, price, model… }
 let extraProduct = null; // позиция заявки, которую уже удалили из базы
 
 function catalog() { return extraProduct ? [...state.products, extraProduct] : state.products; }
@@ -616,7 +621,7 @@ const numPrice = v => Number(String(v || '').replace(/\D/g, '')) || 0;
 function renderCart() {
   $('#cartBox').classList.toggle('hidden', !cart.length);
   $('#cartList').innerHTML = cart.map((c, i) => {
-    const p = catalog().find(p => p.id == c.product_id) || {};
+    const p = catalog().find(p => p.id == c.product_id) || c;
     return `<li><span>${esc([p.model, p.storage, p.color, p.sim, p.activation].filter(Boolean).join(' · '))}</span><b>${money(c.price)}</b><button type="button" class="icon" data-i="${i}" aria-label="Убрать">✕</button></li>`;
   }).join('');
   $('#cartTotal').textContent = cart.length ? `Итого ${cart.length + 1} шт · ${money(cart.reduce((s, c) => s + c.price, 0) + numPrice(form.price.value))}` : '';
@@ -624,13 +629,13 @@ function renderCart() {
 $('#cartList').onclick = e => { const b = e.target.closest('button'); if (b) { cart.splice(b.dataset.i, 1); renderCart(); } };
 $('#addPhoneBtn').onclick = () => {
   if (!form.product_id.value) return toast('Выберите телефон из базы');
-  cart.push({ product_id: form.product_id.value, price: numPrice(form.price.value) });
+  cart.push({ product_id: Number(form.product_id.value), price: numPrice(form.price.value) });
   renderCart();
 };
 
 function openForm(o, date) {
   state.editing = o || null;
-  cart = [];
+  cart = (o?.extras || []).map(x => ({ ...x }));
   form.reset();
   $('#dlgTitle').textContent = o ? 'Заявка' : 'Новая заявка';
   $('#delBtn').classList.toggle('hidden', !o);
@@ -658,12 +663,11 @@ $('#dlgClose').onclick = () => dlg.close();
 
 form.onsubmit = async e => {
   e.preventDefault();
-  const body = Object.fromEntries(new FormData(form));
+  const body = { ...Object.fromEntries(new FormData(form)), extras: cart };
   if (!body.product_id) return toast('Выберите телефон из базы');
   try {
     if (state.editing) await api('/orders/' + state.editing.id, { method: 'PUT', body });
-    // ponytail: несколько телефонов = несколько заявок с общим клиентом; склад и статистика не меняются
-    for (const c of state.editing ? cart : [...cart, { product_id: body.product_id, price: body.price }]) await api('/orders', { method: 'POST', body: { ...body, ...c } });
+    else await api('/orders', { method: 'POST', body });
     dlg.close();
     toast(state.editing ? 'Сохранено' : 'Заявка добавлена');
     if (!state.editing && state.view === 'week') state.weekStart = mondayOf(parse(body.date));
@@ -682,8 +686,8 @@ $('#copyBtn').onclick = async () => {
     `📅 ${dn.toUpperCase()} · ${dd}${o.time ? ' · ' + o.time : ''}`,
     `👤 ${o.client}`,
     o.phone && `📞 ${o.phone}`,
-    `📱 ${[o.model, o.storage, o.color, o.sim, o.activation, o.city].filter(Boolean).join(' · ')}`,
-    o.price && `💰 ${money(o.price)}`,
+    ...[o, ...(o.extras || [])].map(x => `📱 ${[x.model, x.storage, x.color, x.sim, x.activation, x.city].filter(Boolean).join(' · ')}${o.extras?.length && x.price ? ' — ' + money(x.price) : ''}`),
+    sumOf([o]) && `💰 ${money(sumOf([o]))}`,
     o.comment && `⚠️ ${o.comment}`,
     `🧑‍💼 от ${o.seller}`,
   ].filter(Boolean).join('\n');

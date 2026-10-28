@@ -153,3 +153,19 @@ test('products belong to a city; old data is Moscow and orders keep the city', a
   assert.equal((await request('/products', 'POST', { ...product, city: 'Казань' })).id, id + 1);
   assert.equal((await request('/products')).find(p => p.id === id + 1).city, 'Москва');
 });
+
+test('one order holds several phones: reserves, sells and checks stock for each', async () => {
+  const { request } = setup();
+  await request('/products/1', 'PUT', { ...product, qty: 2 });
+  const two = { ...order, extras: [{ product_id: 1, price: '90 000' }] };
+  const { id } = await request('/orders', 'POST', two);
+  const [saved] = await request('/orders');
+  assert.equal(saved.extras.length, 1);
+  assert.equal(saved.extras[0].price, 90000);
+  assert.equal((await request('/products'))[0].reserved, 2);
+  await assert.rejects(request('/orders', 'POST', order), /нет в наличии/);
+  await request('/orders/' + id, 'PUT', { ...two, status: 'sold' });
+  assert.equal((await request('/products'))[0].qty, 0);
+  await request('/orders/' + id, 'DELETE');
+  assert.equal((await request('/products'))[0].qty, 2);
+});

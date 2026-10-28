@@ -11,6 +11,9 @@ export function createLocalData(storage, remote, stock = STOCK) {
   const number = v => Number(String(v ?? '').replace(/\D/g, '')) || null;
   const holds = status => status === 'new' || status === 'sold';
   const error = message => { throw new Error(message); };
+  // Все телефоны заявки: основной + extras
+  const phonesOf = o => (o ? [o, ...(o.extras || [])] : []);
+  const countIn = (o, id) => phonesOf(o).filter(x => x.product_id === id).length;
   function decode(raw) {
     const data = JSON.parse(raw);
     if (data?.version !== 1 || !Array.isArray(data.products) || !Array.isArray(data.orders)
@@ -20,7 +23,7 @@ export function createLocalData(storage, remote, stock = STOCK) {
       || !data.orders.every(o => o && typeof o.id === 'string'
         && ['date', 'client', 'seller', 'model', 'storage', 'color', 'sim'].every(k => typeof o[k] === 'string')
         && /^\d{4}-\d{2}-\d{2}$/.test(o.date) && ['new', 'sold', 'cancel'].includes(o.status)
-        && (o.price === null || Number.isFinite(o.price)))
+        && (o.price === null || Number.isFinite(o.price)) && (o.extras === undefined || Array.isArray(o.extras)))
       || new Set(data.products.map(p => p.id)).size !== data.products.length
       || new Set(data.orders.map(o => o.id)).size !== data.orders.length
       || (data.nextProductId !== undefined && (!Number.isSafeInteger(data.nextProductId) || data.nextProductId < 1))) {
@@ -72,10 +75,8 @@ export function createLocalData(storage, remote, stock = STOCK) {
     addStock();
   }
   function moveStock(data, old, order) {
-    const previous = old && data.products.find(p => p.id === old.product_id);
-    const next = order && data.products.find(p => p.id === order.product_id);
-    if (previous && old.status === 'sold') previous.qty += 1;
-    if (next && order.status === 'sold') next.qty = Math.max(0, next.qty - 1);
+    for (const x of old?.status === 'sold' ? phonesOf(old) : []) { const p = data.products.find(p => p.id === x.product_id); if (p) p.qty += 1; }
+    for (const x of order?.status === 'sold' ? phonesOf(order) : []) { const p = data.products.find(p => p.id === x.product_id); if (p) p.qty = Math.max(0, p.qty - 1); }
   }
   return {
     async exportData() {
@@ -102,7 +103,7 @@ export function createLocalData(storage, remote, stock = STOCK) {
       }
       if (resource === 'products') {
         if (method === 'GET') return data.products.map(p => ({ ...p,
-          reserved: data.orders.filter(o => o.product_id === p.id && o.status === 'new').length,
+          reserved: data.orders.reduce((n, o) => n + (o.status === 'new' ? countIn(o, p.id) : 0), 0),
         })).sort((a, b) => [a.city, a.model, a.storage, a.color, a.sim, a.activation].join().localeCompare([b.city, b.model, b.storage, b.color, b.sim, b.activation].join()));
         if (user.role !== 'admin') error('Только для админа');
         const index = data.products.findIndex(p => p.id === Number(id));
@@ -133,19 +134,28 @@ export function createLocalData(storage, remote, stock = STOCK) {
           moveStock(data, old, null);
           data.orders.splice(index, 1);
         } else if (method === 'POST' || method === 'PUT') {
-          const product = data.products.find(p => p.id === Number(body.product_id))
-            || (old && old.product_id === Number(body.product_id) ? { ...old, id: old.product_id } : null);
-          if (!product) error('Выберите телефон из базы');
+          // Телефон из базы, либо уже удалённый из базы, но записанный в этой заявке
+          const pick = (pid, price) => {
+            const product = data.products.find(p => p.id === Number(pid))
+              || phonesOf(old).map(x => ({ ...x, id: x.product_id })).find(x => x.id === Number(pid));
+            if (!product) error('Выберите телефон из базы');
+            return { product_id: product.id, model: product.model, storage: product.storage, color: product.color, sim: product.sim, activation: product.activation, city: product.city,
+              price: number(price) ?? product.price };
+          };
           const order = Object.fromEntries(['date', 'time', 'client', 'phone', 'comment', 'seller'].map(k => [k, text(body[k])]));
           if (!/^\d{4}-\d{2}-\d{2}$/.test(order.date) || !order.client) error('Дата и имя клиента обязательны');
           if (!order.seller) error('Впишите продавца — чей это телефон');
           Object.assign(order, { id: old?.id || crypto.randomUUID(), created_at: old?.created_at || new Date().toISOString(),
-            product_id: product.id, model: product.model, storage: product.storage, color: product.color, sim: product.sim, activation: product.activation, city: product.city,
-            price: number(body.price) ?? product.price, status: ['new', 'sold', 'cancel'].includes(body.status) ? body.status : 'new' });
-          if (holds(order.status) && !(old && holds(old.status) && old.product_id === order.product_id)) {
-            const current = data.products.find(p => p.id === order.product_id);
-            const reserved = data.orders.filter(o => o.product_id === order.product_id && o.status === 'new' && o.id !== old?.id).length;
-            if (current && current.qty - reserved < 1) error('Этого телефона нет в наличии — все штуки проданы или в брони');
+            ...pick(body.product_id, body.price),
+            extras: (Array.isArray(body.extras) ? body.extras : []).slice(0, 50).map(x => pick(x?.product_id, x?.price)),
+            status: ['new', 'sold', 'cancel'].includes(body.status) ? body.status : 'new' });
+          if (holds(order.status)) for (const pid of new Set(phonesOf(order).map(x => x.product_id))) {
+            const need = countIn(order, pid), had = old && holds(old.status) ? countIn(old, pid) : 0;
+            const current = data.products.find(p => p.id === pid);
+            if (!current || need <= had) continue;
+            const reserved = data.orders.reduce((n, o) => n + (o.status === 'new' && o.id !== old?.id ? countIn(o, pid) : 0), 0);
+            const qty = current.qty + (old?.status === 'sold' ? had : 0);
+            if (qty - reserved < need) error(`${current.model} ${current.storage} ${current.color}: нет в наличии — все штуки проданы или в брони`);
           }
           moveStock(data, old, order);
           if (method === 'POST') data.orders.push(order);
