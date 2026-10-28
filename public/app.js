@@ -187,7 +187,50 @@ function card(o, withDate = false) {
     </div>
   </div>`;
 }
+// Зажать карточку в неделе и перетащить в другой день (или в «Плавающую дату»)
+let drag = null, dragEnded = 0;
+document.addEventListener('pointerdown', e => {
+  const c = e.target.closest('#week .card');
+  if (!c || e.button) return;
+  const d = { c, x: e.clientX, y: e.clientY, on: false };
+  d.timer = setTimeout(() => { d.on = true; c.classList.add('dragging'); navigator.vibrate?.(30); }, 350);
+  drag = d;
+});
+document.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  if (!drag.on) { if (Math.hypot(dx, dy) > 8) { clearTimeout(drag.timer); drag = null; } return; }
+  drag.c.style.transform = `translate(${dx}px, ${dy}px)`;
+  const ag = document.elementFromPoint(e.clientX, e.clientY)?.closest('.ag');
+  for (const el of document.querySelectorAll('.ag.drop')) if (el !== ag) el.classList.remove('drop');
+  ag?.classList.add('drop');
+});
+// Пока тащим — страница не скроллится
+document.addEventListener('touchmove', e => { if (drag?.on) e.preventDefault(); }, { passive: false });
+document.addEventListener('contextmenu', e => { if (e.target.closest('#week .card')) e.preventDefault(); });
+const endDrag = async e => {
+  const d = drag; drag = null;
+  if (!d) return;
+  clearTimeout(d.timer);
+  if (!d.on) return;
+  d.c.classList.remove('dragging'); d.c.style.transform = '';
+  for (const el of document.querySelectorAll('.ag.drop')) el.classList.remove('drop');
+  // клик после перетаскивания не должен открывать заявку
+  dragEnded = Date.now();
+  const day = e.type === 'pointerup' && document.elementFromPoint(e.clientX, e.clientY)?.closest('.ag')?.dataset.day;
+  const o = state.orders.find(o => o.id === d.c.dataset.id);
+  if (day == null || !o || day === o.date) return;
+  try {
+    await api('/orders/' + o.id, { method: 'PUT', body: { ...o, date: day } });
+    toast(day ? 'Перенесено на ' + dayTitle(day) : 'Перенесено в плавающую дату');
+    render().catch(fail);
+  } catch (err) { fail(err); }
+};
+document.addEventListener('pointerup', endDrag);
+document.addEventListener('pointercancel', endDrag);
+
 document.addEventListener('click', e => {
+  if (Date.now() - dragEnded < 400) return;
   const c = e.target.closest('.card');
   if (c) return openForm(state.orders.find(o => o.id === c.dataset.id));
   const add = e.target.closest('.add-day');
@@ -251,7 +294,7 @@ function renderWeek() {
     const name = !key ? 'Плавающая дата' : rel ? `${rel}<span class="ag-dw">${DAYS[i].toLowerCase()}</span>` : DAYS[i];
     const cls = `${key === today ? 'today' : ''} ${key && key < today ? 'past' : ''} ${key ? '' : 'float'}`;
     const num = key ? d.getDate() : '∞';
-    if (!items.length) return `<div class="ag blank ${cls}"><div class="ag-head">
+    if (!items.length) return `<div class="ag blank ${cls}" data-day="${key}"><div class="ag-head">
       <span class="ag-num">${num}</span><span class="ag-name">${name}</span><span class="ag-sub">заявок нет</span>
       <button class="add-day" data-date="${key}">+ Заявка</button></div></div>`;
     // На текущей неделе прошедшие дни свёрнуты в итог; клик по дню меняет это для него
@@ -261,7 +304,7 @@ function renderWeek() {
       sold.length && `продано ${sold.length} на ${money(sumOf(sold))}`,
       late && `<span class="red">${late} просрочено</span>`].filter(Boolean).join(' · ');
     const mix = ['sold', 'new', 'cancel'].map(s => { const n = items.filter(o => o.status === s).length; return n ? `<i class="${s}" style="flex:${n}"></i>` : ''; }).join('');
-    return `<div class="ag ${cls} ${open ? 'open' : ''}">
+    return `<div class="ag ${cls} ${open ? 'open' : ''}" data-day="${key}">
       <button class="ag-head" data-toggle="${key}" aria-expanded="${open}">
         <span class="ag-num">${num}</span>
         <span class="ag-title"><span class="ag-name">${name}</span><span class="ag-sub">${sub}</span></span>

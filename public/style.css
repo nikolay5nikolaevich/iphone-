@@ -475,3 +475,7 @@ label { display: grid; gap: 6px; font-size: 13px; color: var(--muted); font-weig
 .cart-list li { display: flex; align-items: center; gap: 10px; font-size: 13px; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,.05); }
 .cart-list li span { flex: 1; min-width: 0; }
 .cart-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+
+#week .card { -webkit-touch-callout: none; user-select: none; }
+.card.dragging { position: relative; z-index: 50; pointer-events: none; opacity: .9; box-shadow: 0 12px 30px rgba(0,0,0,.5); }
+.ag.drop { box-shadow: 0 0 0 2px var(--link); }
