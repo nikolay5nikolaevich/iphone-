@@ -632,7 +632,6 @@ function openForm(o, date) {
   state.editing = o || null;
   cart = [];
   form.reset();
-  $('#addPhoneBtn').classList.toggle('hidden', !!o);
   $('#dlgTitle').textContent = o ? 'Заявка' : 'Новая заявка';
   $('#delBtn').classList.toggle('hidden', !o);
   $('#copyBtn').classList.toggle('hidden', !o);
@@ -664,7 +663,7 @@ form.onsubmit = async e => {
   try {
     if (state.editing) await api('/orders/' + state.editing.id, { method: 'PUT', body });
     // ponytail: несколько телефонов = несколько заявок с общим клиентом; склад и статистика не меняются
-    else for (const c of [...cart, { product_id: body.product_id, price: body.price }]) await api('/orders', { method: 'POST', body: { ...body, ...c } });
+    for (const c of state.editing ? cart : [...cart, { product_id: body.product_id, price: body.price }]) await api('/orders', { method: 'POST', body: { ...body, ...c } });
     dlg.close();
     toast(state.editing ? 'Сохранено' : 'Заявка добавлена');
     if (!state.editing && state.view === 'week') state.weekStart = mondayOf(parse(body.date));
