@@ -486,3 +486,40 @@ label { display: grid; gap: 6px; font-size: 13px; color: var(--muted); font-weig
 .prow-pay small { display: block; color: var(--muted); font-size: 11px; }
 .prow-pay.th { border-top: 0; color: var(--muted); font-size: 12px; padding-top: 0; }
 .prow-pay.total { font-weight: 700; border-top-width: 2px; }
+
+/* Телефон: компактная неделя — больше заявок на экране */
+@media (max-width: 640px) {
+  .weekbar, .list-head { padding: 12px 12px 2px; gap: 8px; }
+  .week-title, .list-head h2 { font-size: 20px; }
+  #weekSum { font-size: 13px; }
+  .weekbar-ctrl { gap: 6px; }
+  .weekbar-ctrl .pill, .weekbar-ctrl .icon { min-height: 40px; font-size: 14px; }
+  .weekbar-ctrl .icon { width: 40px; height: 40px; }
+  .page { padding-left: 12px; padding-right: 12px; padding-top: 10px; }
+  .kpis { gap: 6px; margin-bottom: 10px; }
+  .kpi { padding: 8px 10px; }
+  .kpi .l, .kpi .s { font-size: 11px; }
+  .kpi .v { font-size: 17px; }
+  .agenda { gap: 6px; }
+  .ag-head { gap: 10px; padding: 6px 10px; min-height: 44px; }
+  .ag-num { font-size: 18px; width: 24px; }
+  .ag-name { font-size: 14px; }
+  .ag-dw, .ag-sub { font-size: 12px; }
+  .ag.blank .ag-head { min-height: 40px; padding: 2px 6px 2px 10px; }
+  .ag.blank .ag-num { font-size: 15px; }
+  .ag.blank .ag-name { font-size: 13px; }
+  .ag.blank .add-day, .ag-body .add-day { min-height: 36px; font-size: 13px; }
+  .ag-body { gap: 6px; padding: 0 6px 6px; }
+  .card { padding: 8px 10px 8px 12px; gap: 6px; }
+  .c-time { font-size: 17px; }
+  .c-time.dated { font-size: 14px; }
+  .c-badge { font-size: 11px; padding: 2px 7px; }
+  .c-name { font-size: 14px; }
+  .c-phone { min-height: 28px; font-size: 13px; }
+  .c-device { padding: 6px 8px; gap: 4px; }
+  .c-model { font-size: 13px; }
+  .c-specs span { font-size: 11px; padding: 1px 6px; }
+  .c-comment { font-size: 12px; }
+  .c-seller { font-size: 12px; }
+  .c-price { font-size: 14px; }
+}
